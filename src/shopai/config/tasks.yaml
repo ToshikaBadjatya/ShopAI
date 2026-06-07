@@ -1,0 +1,44 @@
+planning_task:
+  description: >
+    Fetch the current weather for {location} using the weather_by_location tool.
+    Create a comprehensive shopping plan for: {shopping_request}
+    Consider the user's gender, body type, and any stated preferences.
+    Use the weather to suggest appropriate clothing and accessories.
+  expected_output: >
+   Return a list of json for outfit suggestions based on the shopping request.
+  agent: planning_agent
+
+recommendation_task:
+  description: >
+    Based on the shopping plan, use the outfit_product_scraper tool for each
+    outfit piece to fetch 5 bestseller product links from Amazon, Flipkart,
+    Myntra, and Meesho. Research and recommend specific products for
+    {shopping_request}. Compare options by price, quality, and fit with user
+    preferences. Stay within the budget of {budget}.
+  expected_output: >
+    A ranked list of product recommendations with marketplace links, rationale,
+    pros and cons, and estimated prices
+  agent: recommendation_agent
+
+visualize_task:
+  description: >
+    Transform the shopping plan and product recommendations into a polished
+    visual report for {shopping_request}. Use markdown tables, clear sections,
+    and an easy-to-scan layout that highlights the best options.
+
+    Additionally, call the outfit_visualizer tool ONCE with:
+      - product_url: the FIRST product URL found in the recommendation agent output
+      - outfit_description: a concise plain-text summary of the full outfit
+      - gender: {gender}
+      - height: {height}
+      - body_type: {body_type}
+
+    The tool will generate a 1024x1024 model image dressed in the outfit and
+    return the saved file path. Embed the image in the markdown report directly
+    after the outfit summary section using standard markdown image syntax:
+    ![Outfit Visualization](<path returned by tool>)
+  expected_output: >
+    A beautifully formatted markdown shopping guide with comparison tables,
+    a prioritized shortlist, a final summary, and an embedded outfit
+    visualization image. Formatted as markdown without '```'
+  agent: visualize_agent

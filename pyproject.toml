@@ -1,0 +1,24 @@
+[project]
+name = "shopai"
+version = "0.1.0"
+description = "ShopAI using crewAI"
+authors = [{ name = "Your Name", email = "you@example.com" }]
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "crewai[google-genai,tools]==1.14.5a2",
+]
+
+[project.scripts]
+shopai = "shopai.main:run"
+run_crew = "shopai.main:run"
+train = "shopai.main:train"
+replay = "shopai.main:replay"
+test = "shopai.main:test"
+run_with_trigger = "shopai.main:run_with_trigger"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.crewai]
+type = "crew"
