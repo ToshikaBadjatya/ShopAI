@@ -36,13 +36,17 @@ import com.shopai.android.ui.theme.TextSecondary
 @Composable
 fun ProfileScreen(
     onBack: () -> Unit = {},
-    onSaveProfile: () -> Unit = {}
+    onSaveProfile: () -> Unit = {},
+    selectedHeight: String = "Select your height",
+    onHeightSelected: (String) -> Unit = {},
+    selectedBodyType: String = "",
+    onBodyTypeSelected: (String) -> Unit = {},
+    selectedColors: Set<String> = emptySet(),
+    onColorToggled: (String) -> Unit = {},
+    selectedStyles: Set<String> = emptySet(),
+    onStyleToggled: (String) -> Unit = {}
 ) {
-    var selectedHeight by remember { mutableStateOf("Select your height") }
     var heightDropdownExpanded by remember { mutableStateOf(false) }
-    var selectedBodyType by remember { mutableStateOf("") }
-    var selectedColors by remember { mutableStateOf(emptySet<Color>()) }
-    var selectedStyles by remember { mutableStateOf(emptySet<String>()) }
 
     val heightOptions = listOf(
         "Under 5'0\"", "5'0\" - 5'3\"", "5'4\" - 5'7\"", "5'8\" - 5'11\"", "6'0\" and above"
@@ -53,14 +57,7 @@ fun ProfileScreen(
         Triple(Icons.Default.Straighten, "Slim", "slim"),
         Triple(Icons.Default.AccessibilityNew, "Plus", "plus")
     )
-    val colorPalette = listOf(
-        Color(0xFFE53935),
-        Color(0xFF212121),
-        Color(0xFF9E9E9E),
-        Color(0xFFF5F5DC),
-        Color(0xFF1A237E),
-        Color(0xFF795548)
-    )
+    val colorPalette = listOf("#E53935", "#212121", "#9E9E9E", "#F5F5DC", "#1A237E", "#795548")
     val styleOptions = listOf(
         "Streetwear", "Minimalist", "Formal", "Boho", "Vintage", "Preppy", "Athleisure"
     )
@@ -99,7 +96,6 @@ fun ProfileScreen(
 
                 Spacer(modifier = Modifier.height(28.dp))
 
-                // Height
                 Text(text = "Height", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1A1A2E))
                 Spacer(modifier = Modifier.height(8.dp))
                 ExposedDropdownMenuBox(
@@ -128,7 +124,7 @@ fun ProfileScreen(
                             DropdownMenuItem(
                                 text = { Text(option) },
                                 onClick = {
-                                    selectedHeight = option
+                                    onHeightSelected(option)
                                     heightDropdownExpanded = false
                                 }
                             )
@@ -138,7 +134,6 @@ fun ProfileScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Body Type
                 Text(text = "Body Type", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1A1A2E))
                 Spacer(modifier = Modifier.height(12.dp))
                 LazyVerticalGrid(
@@ -154,19 +149,23 @@ fun ProfileScreen(
                             icon = icon,
                             label = label,
                             selected = selectedBodyType == key,
-                            onClick = { selectedBodyType = key }
+                            onClick = { onBodyTypeSelected(key) }
                         )
                     }
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Color Palette
                 Text(text = "Favorite Color Palette", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1A1A2E))
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    colorPalette.forEach { color ->
-                        val isSelected = color in selectedColors
+                    colorPalette.forEach { hex ->
+                        val color = try {
+                            Color(android.graphics.Color.parseColor(hex))
+                        } catch (e: Exception) {
+                            Color.Gray
+                        }
+                        val isSelected = hex in selectedColors
                         Box(
                             modifier = Modifier
                                 .size(40.dp)
@@ -176,22 +175,19 @@ fun ProfileScreen(
                                     if (isSelected) Modifier.border(2.dp, ShopAIRed, CircleShape)
                                     else Modifier
                                 )
-                                .clickable {
-                                    selectedColors = if (isSelected) selectedColors - color else selectedColors + color
-                                }
+                                .clickable { onColorToggled(hex) }
                         )
                     }
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Clothing Style
                 Text(text = "Clothing Style (Multi-select)", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1A1A2E))
                 Spacer(modifier = Modifier.height(10.dp))
                 ChipSelector(
                     options = styleOptions,
                     selected = selectedStyles,
-                    onSelectionChanged = { selectedStyles = it },
+                    onSelectionChanged = { newSet -> newSet.forEach { onStyleToggled(it) } },
                     multiSelect = true
                 )
 

@@ -25,7 +25,6 @@ import com.shopai.android.reusables.ChipSelector
 import com.shopai.android.reusables.PrimaryButton
 import com.shopai.android.reusables.ShopAITopBar
 import com.shopai.android.ui.theme.Background
-import com.shopai.android.ui.theme.CardBackground
 import com.shopai.android.ui.theme.ShopAIRed
 import com.shopai.android.ui.theme.TextHint
 import com.shopai.android.ui.theme.TextSecondary
@@ -33,11 +32,13 @@ import com.shopai.android.ui.theme.TextSecondary
 @Composable
 fun MoodScreen(
     onBack: () -> Unit = {},
-    onPlanOutfit: (String) -> Unit = {}
+    onPlanOutfit: () -> Unit = {},
+    moodText: String = "",
+    onMoodTextChanged: (String) -> Unit = {},
+    selectedVibes: Set<String> = emptySet(),
+    onVibeToggled: (String) -> Unit = {},
+    isLoading: Boolean = false
 ) {
-    var moodText by remember { mutableStateOf("") }
-    var selectedVibes by remember { mutableStateOf(emptySet<String>()) }
-
     val quickVibes = listOf(
         "Summer Brunch", "Corporate Chic", "Late Night Party", "Scandi Minimal", "Gorpcore"
     )
@@ -101,7 +102,7 @@ fun MoodScreen(
                     Column(modifier = Modifier.padding(16.dp)) {
                         TextField(
                             value = moodText,
-                            onValueChange = { moodText = it },
+                            onValueChange = onMoodTextChanged,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(min = 100.dp),
@@ -163,7 +164,11 @@ fun MoodScreen(
                 ChipSelector(
                     options = quickVibes,
                     selected = selectedVibes,
-                    onSelectionChanged = { selectedVibes = it },
+                    onSelectionChanged = { newSet ->
+                        val added = newSet - selectedVibes
+                        val removed = selectedVibes - newSet
+                        (added + removed).forEach { onVibeToggled(it) }
+                    },
                     multiSelect = false
                 )
 
@@ -173,16 +178,8 @@ fun MoodScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    TrendCard(
-                        label = "Trending Now",
-                        imageUrl = "",
-                        modifier = Modifier.weight(1f)
-                    )
-                    TrendCard(
-                        label = "Recently Saved",
-                        imageUrl = "",
-                        modifier = Modifier.weight(1f)
-                    )
+                    TrendCard(label = "Trending Now", imageUrl = "", modifier = Modifier.weight(1f))
+                    TrendCard(label = "Recently Saved", imageUrl = "", modifier = Modifier.weight(1f))
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -193,11 +190,16 @@ fun MoodScreen(
                 shadowElevation = 8.dp,
                 color = Color.White
             ) {
-                PrimaryButton(
-                    text = "⚡ Plan My Outfit",
-                    onClick = { onPlanOutfit(moodText) },
-                    modifier = Modifier.padding(16.dp)
-                )
+                Box(modifier = Modifier.padding(16.dp), contentAlignment = Alignment.Center) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(48.dp),
+                            color = ShopAIRed
+                        )
+                    } else {
+                        PrimaryButton(text = "⚡ Plan My Outfit", onClick = onPlanOutfit)
+                    }
+                }
             }
         }
     }

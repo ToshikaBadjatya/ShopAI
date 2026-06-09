@@ -21,35 +21,28 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.shopai.android.data.model.OutfitPlanResponse
 import com.shopai.android.reusables.PrimaryButton
 import com.shopai.android.reusables.ShopAITopBar
 import com.shopai.android.ui.theme.Background
-import com.shopai.android.ui.theme.ChipBorder
 import com.shopai.android.ui.theme.ShopAIRed
 import com.shopai.android.ui.theme.TextSecondary
-
-data class ProductItem(
-    val imageUrl: String,
-    val name: String,
-    val price: String,
-    val platform: String
-)
 
 @Composable
 fun RecommendationScreen(
     onBack: () -> Unit = {},
-    onRegenerate: () -> Unit = {}
+    onRegenerate: () -> Unit = {},
+    onVisualize: (outfitId: String) -> Unit = {},
+    isFavorite: Boolean = false,
+    onFavoriteToggled: () -> Unit = {},
+    outfitPlan: OutfitPlanResponse? = null
 ) {
-    var isFavorite by remember { mutableStateOf(false) }
-
-    val styleTags = listOf("Sophisticated", "Productive", "Summer 24")
-    val products = listOf(
-        ProductItem("", "Tailored Charcoal Blazer", "\$189.00", "Amazon"),
-        ProductItem("", "Structured Leather Tote", "\$245.00", "Myntra"),
-        ProductItem("", "Pointed-Toe Suede Pumps", "\$120.00", "Amazon"),
-        ProductItem("", "Ivory Silk Blouse", "\$95.00", "Myntra"),
-        ProductItem("", "Classic Minimalist Watch", "\$310.00", "Amazon")
-    )
+    val outfitName = outfitPlan?.outfitName ?: "Modern Corporate Look"
+    val outfitDescription = outfitPlan?.description
+        ?: "A sharp, monochromatic base with bold textural contrasts for the modern professional."
+    val styleTags = outfitPlan?.tags ?: listOf("Sophisticated", "Productive", "Summer 24")
+    val heroImageUrl = outfitPlan?.heroImageUrl ?: ""
+    val products = outfitPlan?.products ?: emptyList()
 
     Scaffold(
         topBar = {
@@ -60,7 +53,7 @@ fun RecommendationScreen(
                     IconButton(onClick = {}) {
                         Icon(Icons.Default.Share, contentDescription = "Share", tint = Color(0xFF6B6B80))
                     }
-                    IconButton(onClick = { isFavorite = !isFavorite }) {
+                    IconButton(onClick = onFavoriteToggled) {
                         Icon(
                             imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                             contentDescription = "Favorite",
@@ -82,7 +75,6 @@ fun RecommendationScreen(
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
                 item {
-                    // Hero image
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -90,7 +82,7 @@ fun RecommendationScreen(
                             .background(Color(0xFF2A2A3E))
                     ) {
                         AsyncImage(
-                            model = "",
+                            model = heroImageUrl,
                             contentDescription = "Outfit hero",
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
@@ -125,14 +117,14 @@ fun RecommendationScreen(
                 item {
                     Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
                         Text(
-                            text = "Modern Corporate Look",
+                            text = outfitName,
                             fontSize = 22.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF1A1A2E)
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "A sharp, monochromatic base with bold textural contrasts for the modern professional.",
+                            text = outfitDescription,
                             fontSize = 14.sp,
                             color = TextSecondary,
                             lineHeight = 20.sp
@@ -190,11 +182,28 @@ fun RecommendationScreen(
                 shadowElevation = 8.dp,
                 color = Color.White
             ) {
-                PrimaryButton(
-                    text = "Regenerate Outfit Recommendations",
-                    onClick = onRegenerate,
-                    modifier = Modifier.padding(16.dp)
-                )
+                Column(modifier = Modifier.padding(16.dp)) {
+                    OutlinedButton(
+                        onClick = { onVisualize(outfitPlan?.outfitId ?: "") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, ShopAIRed),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = ShopAIRed)
+                    ) {
+                        Text(
+                            text = "Visualize Outfit",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    PrimaryButton(
+                        text = "Regenerate Outfit Recommendations",
+                        onClick = onRegenerate
+                    )
+                }
             }
         }
     }
