@@ -1,0 +1,77 @@
+# ── macOS ────────────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# ── Environment / secrets ────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+*.egg
+MANIFEST
+
+# Tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.cache/
+
+# uv
+.python-version
+
+# ── Android / Gradle ─────────────────────────────────────────────────────────
+*.iml
+.gradle/
+**/build/
+local.properties
+
+# Signing keys — never commit these
+*.jks
+*.keystore
+
+# NDK / CMake side-outputs
+.externalNativeBuild/
+.cxx/
+
+# Profiling captures from Android Studio
+captures/
+
+# ── IntelliJ / Android Studio (.idea) ────────────────────────────────────────
+# Keep: gradle.xml, misc.xml, vcs.xml, runConfigurations/, AndroidProjectSystem.xml
+# Ignore everything that is machine- or session-specific
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/shelf/
+.idea/caches/
+.idea/dictionaries/
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+.idea/deploymentTargetDropDown.xml
+.idea/deploymentTargetSelector.xml
+.idea/migrations.xml
+.idea/androidTestResultsUserPreferences.xml
+
+# ── Editor scratch files ──────────────────────────────────────────────────────
+*.swp
+*.swo
+*~
