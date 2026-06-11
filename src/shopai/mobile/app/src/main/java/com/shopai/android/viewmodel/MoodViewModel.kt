@@ -1,16 +1,20 @@
 package com.shopai.android.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import android.util.Log
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.shopai.android.data.api.RetrofitClient
 import com.shopai.android.data.model.OutfitPlanRequest
 import com.shopai.android.data.model.OutfitPlanResponse
+import com.shopai.android.data.repository.OutfitRepository
+import com.shopai.android.prefs.Session
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class MoodViewModel : ViewModel() {
+class MoodViewModel(application: Application) : AndroidViewModel(application) {
     private val _moodText = MutableStateFlow("")
     val moodText: StateFlow<String> = _moodText.asStateFlow()
 
@@ -43,16 +47,23 @@ class MoodViewModel : ViewModel() {
             _isLoading.value = true
             _error.value = null
             try {
-                val response = RetrofitClient.apiService.planOutfit(
-                    OutfitPlanRequest(
-                        moodText = _moodText.value,
-                        vibes = _selectedVibes.value.toList()
-                    )
-                )
+                val profile = Session.getProfile(getApplication())
+                val vibesText = _selectedVibes.value.joinToString(", ")
+                val fullMoodText = when {
+                    _moodText.value.isNotEmpty() && vibesText.isNotEmpty() ->
+                        "${_moodText.value}. Vibe: $vibesText"
+                    _moodText.value.isNotEmpty() -> _moodText.value
+                    else -> vibesText
+                }
+                val request = OutfitPlanRequest(moodText = fullMoodText, profile = profile)
+                val response = RetrofitClient.apiService.planOutfit(request)
+                Log.e("response","response is $response")
                 if (response.isSuccessful) {
-                    _planResult.value = response.body()
+                    val result = response.body()
+                    OutfitRepository.lastPlanResult = result
+                    _planResult.value = result
                 } else {
-                    _error.value = "Failed to plan outfit"
+                    _error.value = "Failed to plan outfit: ${response.code()}"
                 }
             } catch (e: Exception) {
                 _error.value = e.message

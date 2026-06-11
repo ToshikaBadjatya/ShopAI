@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.shopai.android.data.api.RetrofitClient
 import com.shopai.android.data.model.OutfitPlanResponse
-import com.shopai.android.data.model.ProductData
+import com.shopai.android.data.repository.OutfitRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,20 +24,7 @@ class RecommendationViewModel : ViewModel() {
     val error: StateFlow<String?> = _error.asStateFlow()
 
     init {
-        _recommendation.value = OutfitPlanResponse(
-            outfitId = "mock-001",
-            outfitName = "Modern Corporate Look",
-            description = "A sharp, monochromatic base with bold textural contrasts for the modern professional.",
-            tags = listOf("Sophisticated", "Productive", "Summer 24"),
-            heroImageUrl = "",
-            products = listOf(
-                ProductData("1", "", "Tailored Charcoal Blazer", "\$189.00", "Amazon"),
-                ProductData("2", "", "Structured Leather Tote", "\$245.00", "Myntra"),
-                ProductData("3", "", "Pointed-Toe Suede Pumps", "\$120.00", "Amazon"),
-                ProductData("4", "", "Ivory Silk Blouse", "\$95.00", "Myntra"),
-                ProductData("5", "", "Classic Minimalist Watch", "\$310.00", "Amazon")
-            )
-        )
+        _recommendation.value = OutfitRepository.lastPlanResult
     }
 
     fun toggleFavorite() {
@@ -51,7 +38,9 @@ class RecommendationViewModel : ViewModel() {
             try {
                 val response = RetrofitClient.apiService.getRecommendations()
                 if (response.isSuccessful) {
-                    _recommendation.value = response.body()
+                    val result = response.body()
+                    OutfitRepository.lastPlanResult = result
+                    _recommendation.value = result
                 } else {
                     _error.value = "Failed to load recommendations"
                 }

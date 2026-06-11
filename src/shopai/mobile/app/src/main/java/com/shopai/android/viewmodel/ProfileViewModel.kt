@@ -1,16 +1,18 @@
 package com.shopai.android.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.shopai.android.data.api.RetrofitClient
 import com.shopai.android.data.model.UserProfile
+import com.shopai.android.prefs.Session
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class ProfileViewModel : ViewModel() {
-    private val _profileState = MutableStateFlow(UserProfile())
+class ProfileViewModel(application: Application) : AndroidViewModel(application) {
+    private val _profileState = MutableStateFlow(Session.getProfile(application))
     val profileState: StateFlow<UserProfile> = _profileState.asStateFlow()
 
     private val _isLoading = MutableStateFlow(false)
@@ -40,6 +42,7 @@ class ProfileViewModel : ViewModel() {
     }
 
     fun saveProfile() {
+        Session.saveProfile(getApplication(), _profileState.value)
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null

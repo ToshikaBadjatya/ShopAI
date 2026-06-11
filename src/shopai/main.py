@@ -110,5 +110,25 @@ def run_with_trigger():
         raise Exception(f"An error occurred while running the crew with trigger: {e}")
 
 
+def run_api():
+    """
+    Start the ShopAI HITL FastAPI server with uvicorn.
+    """
+    try:
+        import uvicorn  # type: ignore[import]
+    except ImportError:
+        raise ImportError(
+            "uvicorn is required to run the API server. "
+            "Install it with: uv add uvicorn"
+        )
+
+    uvicorn.run(
+        "shopai.api.app:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+    )
+
+
 if __name__ == "__main__":
     run()

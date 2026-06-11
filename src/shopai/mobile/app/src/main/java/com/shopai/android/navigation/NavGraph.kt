@@ -57,6 +57,7 @@ fun NavGraph(
                 onMoodTextChanged = { viewModel.updateMoodText(it) },
                 selectedVibes = selectedVibes,
                 onVibeToggled = { viewModel.toggleVibe(it) },
+                goToProfile = {navController.navigate(Screen.Profile.route)},
                 isLoading = isLoading
             )
         }
@@ -68,7 +69,7 @@ fun NavGraph(
             ProfileScreen(
                 onBack = { navController.popBackStack() },
                 onSaveProfile = {
-//                    viewModel.saveProfile()
+                    viewModel.saveProfile()
                     navController.navigate(Screen.Mood.route) {
                         popUpTo(Screen.Mood.route) { inclusive = true }
                     }

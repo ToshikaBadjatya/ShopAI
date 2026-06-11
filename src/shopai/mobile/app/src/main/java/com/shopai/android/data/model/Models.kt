@@ -9,7 +9,7 @@ data class UserProfile(
 
 data class OutfitPlanRequest(
     val moodText: String,
-    val vibes: List<String>
+    val profile: UserProfile
 )
 
 data class ProductData(

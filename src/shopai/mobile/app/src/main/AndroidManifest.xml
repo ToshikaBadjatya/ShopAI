@@ -4,6 +4,7 @@
     <application
         android:allowBackup="true"
         android:label="ShopAI"
+        android:usesCleartextTraffic="true"
         >
         <activity
             android:name=".MainActivity"

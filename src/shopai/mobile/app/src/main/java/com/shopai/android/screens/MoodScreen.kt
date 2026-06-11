@@ -37,6 +37,7 @@ fun MoodScreen(
     onMoodTextChanged: (String) -> Unit = {},
     selectedVibes: Set<String> = emptySet(),
     onVibeToggled: (String) -> Unit = {},
+    goToProfile:()-> Unit,
     isLoading: Boolean = false
 ) {
     val quickVibes = listOf(
@@ -49,7 +50,7 @@ fun MoodScreen(
                 showBack = true,
                 onBack = onBack,
                 actions = {
-                    IconButton(onClick = {}) {
+                    IconButton(onClick = goToProfile) {
                         Icon(
                             imageVector = Icons.Default.Settings,
                             contentDescription = "Settings",

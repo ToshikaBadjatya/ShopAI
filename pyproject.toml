@@ -6,6 +6,8 @@ authors = [{ name = "Your Name", email = "you@example.com" }]
 requires-python = ">=3.10,<3.14"
 dependencies = [
     "crewai[google-genai,tools]==1.14.5a2",
+    "fastapi>=0.136.3",
+    "uvicorn>=0.49.0",
 ]
 
 [project.scripts]
@@ -15,6 +17,7 @@ train = "shopai.main:train"
 replay = "shopai.main:replay"
 test = "shopai.main:test"
 run_with_trigger = "shopai.main:run_with_trigger"
+run_api = "shopai.main:run_api"
 
 [build-system]
 requires = ["hatchling"]

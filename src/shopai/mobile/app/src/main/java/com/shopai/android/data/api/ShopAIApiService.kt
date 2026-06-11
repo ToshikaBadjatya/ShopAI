@@ -11,6 +11,7 @@ import retrofit2.http.POST
 import retrofit2.http.Path
 
 interface ShopAIApiService {
+
     @POST("profile/update")
     suspend fun updateProfile(@Body profile: UserProfile): Response<Unit>
 
