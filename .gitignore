@@ -56,6 +56,12 @@ local.properties
 # Profiling captures from Android Studio
 captures/
 
+# JVM heap dumps
+*.hprof
+
+# Design-reference PNGs that ended up inside the Java source tree (not Android resources)
+**/src/main/java/**/*.png
+
 # ── IntelliJ / Android Studio (.idea) ────────────────────────────────────────
 # Keep: gradle.xml, misc.xml, vcs.xml, runConfigurations/, AndroidProjectSystem.xml
 # Ignore everything that is machine- or session-specific
