@@ -16,7 +16,7 @@ interface ShopAIApiService {
     suspend fun updateProfile(@Body profile: UserProfile): Response<Unit>
 
     @POST("outfit/plan")
-    suspend fun planOutfit(@Body request: OutfitPlanRequest): Response<OutfitPlanResponse>
+    suspend fun planOutfit(@Body request: OutfitPlanRequest): Response<List<OutfitPlanResponse>>
 
     @GET("outfit/recommendations")
     suspend fun getRecommendations(): Response<OutfitPlanResponse>

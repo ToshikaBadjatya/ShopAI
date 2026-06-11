@@ -41,13 +41,14 @@ fun NavGraph(
             val moodText by viewModel.moodText.collectAsState()
             val selectedVibes by viewModel.selectedVibes.collectAsState()
             val isLoading by viewModel.isLoading.collectAsState()
-            val planResult by viewModel.planResult.collectAsState()
+            val planIdeas by viewModel.planIdeas.collectAsState()
+            val selectedOutfit by viewModel.selectedOutfit.collectAsState()
 
-            LaunchedEffect(planResult) {
-                if (planResult != null) {
+            LaunchedEffect(selectedOutfit) {
+                if (selectedOutfit != null) {
                     navController.navigate(Screen.Recommendation.route)
+                    viewModel.clearSelectedOutfit()
                 }
-
             }
 
             MoodScreen(
@@ -57,8 +58,10 @@ fun NavGraph(
                 onMoodTextChanged = { viewModel.updateMoodText(it) },
                 selectedVibes = selectedVibes,
                 onVibeToggled = { viewModel.toggleVibe(it) },
-                goToProfile = {navController.navigate(Screen.Profile.route)},
-                isLoading = isLoading
+                goToProfile = { navController.navigate(Screen.Profile.route) },
+                isLoading = isLoading,
+                planIdeas = planIdeas,
+                onOutfitSelected = { viewModel.selectOutfit(it) }
             )
         }
 

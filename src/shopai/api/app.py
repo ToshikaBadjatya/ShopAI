@@ -111,14 +111,29 @@ def _crew_inputs(mood_text: str, vibes: List[str]) -> dict:
     }
 
 
-def _planning_to_response(outfit_id: str, planning: dict, products: List[ProductData] = None) -> OutfitPlanResponse:
+def _planning_to_outfit_list(plan_id: str, planning: dict, products: List[ProductData] = None) -> List[OutfitPlanResponse]:
+    outfits = planning.get("outfits", [])[:5]
+    return [
+        OutfitPlanResponse(
+            outfitId=f"{plan_id}:{i}",
+            outfitName=outfit.get("outfit_name", ""),
+            description=outfit.get("rationale", ""),
+            tags=outfit.get("items", []),
+            heroImageUrl="",
+            products=products or [],
+        )
+        for i, outfit in enumerate(outfits)
+    ]
+
+
+def _planning_to_response(plan_id: str, planning: dict, outfit_idx: int = 0, products: List[ProductData] = None) -> OutfitPlanResponse:
     outfits = planning.get("outfits", [])
-    first = outfits[0] if outfits else {}
+    outfit = outfits[outfit_idx] if outfit_idx < len(outfits) else {}
     return OutfitPlanResponse(
-        outfitId=outfit_id,
-        outfitName=first.get("outfit_name", ""),
-        description=first.get("rationale", ""),
-        tags=first.get("items", []),
+        outfitId=f"{plan_id}:{outfit_idx}",
+        outfitName=outfit.get("outfit_name", ""),
+        description=outfit.get("rationale", ""),
+        tags=outfit.get("items", []),
         heroImageUrl="",
         products=products or [],
     )
@@ -150,7 +165,7 @@ async def update_profile(profile: UserProfile):
     return {}
 
 
-@app.post("/outfit/plan", response_model=OutfitPlanResponse)
+@app.post("/outfit/plan", response_model=List[OutfitPlanResponse])
 async def plan_outfit(request: OutfitPlanRequest):
     global _current_outfit_id
 
@@ -162,11 +177,11 @@ async def plan_outfit(request: OutfitPlanRequest):
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Planning agent failed: {exc}")
 
-    outfit_id = str(uuid.uuid4())
-    _outfit_store[outfit_id] = {"planning": planning, "inputs": inputs}
-    _current_outfit_id = outfit_id
+    plan_id = str(uuid.uuid4())
+    _outfit_store[plan_id] = {"planning": planning, "inputs": inputs}
+    _current_outfit_id = plan_id
 
-    return _planning_to_response(outfit_id, planning)
+    return _planning_to_outfit_list(plan_id, planning)
 
 
 @app.get("/outfit/recommendations", response_model=OutfitPlanResponse)
@@ -174,8 +189,8 @@ async def get_recommendations():
     if not _current_outfit_id or _current_outfit_id not in _outfit_store:
         raise HTTPException(status_code=404, detail="No outfit plan found. Call /outfit/plan first.")
 
-    outfit_id = _current_outfit_id
-    entry = _outfit_store[outfit_id]
+    plan_id = _current_outfit_id
+    entry = _outfit_store[plan_id]
     planning = entry["planning"]
     inputs = entry["inputs"]
 
@@ -187,15 +202,22 @@ async def get_recommendations():
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Recommendation agent failed: {exc}")
 
-    _outfit_store[outfit_id]["recommendation"] = recommendation
+    _outfit_store[plan_id]["recommendation"] = recommendation
     products = _recommendation_products(recommendation)
 
-    return _planning_to_response(outfit_id, planning, products)
+    return _planning_to_response(plan_id, planning, outfit_idx=0, products=products)
 
 
-@app.get("/outfit/visualize/{outfitId}", response_model=VisualizeData)
+@app.get("/outfit/visualize/{outfitId:path}", response_model=VisualizeData)
 async def visualize_outfit(outfitId: str):
-    entry = _outfit_store.get(outfitId)
+    if ":" in outfitId:
+        plan_id, _, idx_str = outfitId.rpartition(":")
+        outfit_idx = int(idx_str) if idx_str.isdigit() else 0
+    else:
+        plan_id = outfitId
+        outfit_idx = 0
+
+    entry = _outfit_store.get(plan_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Outfit not found.")
     if "recommendation" not in entry:
@@ -217,7 +239,7 @@ async def visualize_outfit(outfitId: str):
     visual_url = f"/static/{os.path.basename(image_path)}" if image_path else ""
 
     outfits = planning.get("outfits", [])
-    outfit_name = outfits[0].get("outfit_name", "") if outfits else ""
+    outfit_name = outfits[outfit_idx].get("outfit_name", "") if outfit_idx < len(outfits) else ""
     products = _recommendation_products(recommendation)
 
     return VisualizeData(

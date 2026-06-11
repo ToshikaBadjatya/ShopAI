@@ -1,54 +1,244 @@
-# Shopai Crew
+# ShopAI
 
-Welcome to the Shopai Crew project, powered by [crewAI](https://crewai.com). This template is designed to help you set up a multi-agent AI system with ease, leveraging the powerful and flexible framework provided by crewAI. Our goal is to enable your agents to collaborate effectively on complex tasks, maximizing their collective intelligence and capabilities.
+## AI-Powered Outfit Planning & Shopping Assistant
 
-## Installation
+ShopAI helps users decide what to wear, discover the best products online, and visualize outfits before making a purchase.
 
-Ensure you have Python >=3.10 <3.14 installed on your system. This project uses [UV](https://docs.astral.sh/uv/) for dependency management and package handling, offering a seamless setup and execution experience.
+---
 
-First, if you haven't already, install uv:
+# Problem Statement
 
-```bash
-pip install uv
+Shopping for clothing is often fragmented and time-consuming.
+
+Users struggle with:
+
+- Deciding what to wear for a specific occasion
+- Searching across multiple marketplaces to find suitable products
+- Comparing alternatives fairly across price, reviews, and style
+- Understanding how an outfit will actually look on them before purchasing
+
+These challenges often lead to decision fatigue, poor purchase confidence, and higher return rates.
+
+---
+
+# Product Overview
+
+ShopAI is an AI-powered outfit planning and shopping assistant that helps users:
+
+1. Plan outfits based on occasions, preferences, and body type
+2. Discover matching products from online marketplaces
+3. Visualize complete outfits before purchasing
+
+The platform combines:
+
+- AI-driven outfit planning
+- Marketplace product discovery
+- Personalized outfit visualization
+
+---
+
+# Key Features (V1)
+
+### Outfit Planning
+
+- Understands user intent from:
+  - Occasion
+  - Style preferences
+  - Body type
+- Generates Top 5 outfit recommendations
+- Allows users to explore additional outfit options
+
+### Mix & Match Recommendations
+
+Users can start with selected clothing pieces and generate complementary outfit suggestions around them.
+
+### Shopping Discovery
+
+- Finds matching products across marketplaces
+- Provides direct purchase links
+- Supports platforms such as Myntra, Amazon, Meesho, and more
+
+### Outfit Visualization
+
+- Select products for each outfit component
+- Generate an AI-rendered preview
+- Visualize how the final outfit may look based on body type
+
+---
+
+# Out of Scope (V1)
+
+- Social shopping features
+- Community interactions
+- Voice-first experiences
+- Marketplace inventory synchronization
+- Direct checkout integrations
+
+---
+
+# Target Users
+
+## Persona A — The Overwhelmed Decision Maker
+
+**Goals**
+- Quickly decide what to wear
+- Discover suitable outfit options
+
+**Pain Points**
+- Too many fashion choices
+- Lack of styling confidence
+
+**Primary Need**
+Planning + Discovery
+
+## Persona B — Price & Time Sensitive Shopper
+
+**Goals**
+- Find 2–3 strong options quickly
+- Reduce shopping time
+
+**Pain Points**
+- Excessive browsing
+- Conflicting reviews
+
+**Primary Need**
+Efficient Discovery
+
+## Persona C — Body-Image Conscious Shopper
+
+**Goals**
+- Understand what styles suit their body type
+
+**Pain Points**
+- Uncertainty about personal style
+- Low confidence in purchase decisions
+
+**Primary Need**
+Visualization & Confidence Building
+
+---
+
+# Success Metrics
+
+## North Star Metric
+
+### Qualified Purchase Assist Rate (QPAR)
+
+Percentage of sessions where users successfully complete:
+
+Plan → Discover → Visualize
+
+within a defined time window (1 hour).
+
+## Funnel Metrics
+
+- Intent Capture Rate
+- Shortlist Completion Rate
+- Product Click-Through Rate (CTR)
+- Recommendation Success Rate
+
+## Quality Metrics
+
+- Customer Satisfaction (CSAT)
+- Recommendation Trust Score
+- Safety Incident Rate
+
+## Operational Metrics
+
+- Average Response Latency
+- Cost Per Assisted Session
+- Agent Success Rate
+
+---
+
+# System Architecture
+
+## Why Multi-Agent Architecture?
+
+- Reduce hallucinations through focused context windows
+- Optimize cost by using specialized models
+- Improve reliability through deterministic workflows
+- Increase scalability through modular agents
+
+---
+
+# Agent Architecture
+
+## 1. Planning Agent
+
+**Responsibility:** Convert user intent into a structured outfit planning request.
+
+- Input: User Prompt (≤200 words), Preferences (≤500 words)
+- Input Tokens: ~1,300–1,600
+- Output: Structured JSON (~350 tokens)
+- Context Window: 4K
+- Latency: 2–5 sec
+- Models: GPT-4.1 Mini, Claude Sonnet 4
+
+## 2. Recommendation Agent
+
+**Responsibility:** Find the best outfit recommendations and shopping links.
+
+- Input Tokens: ~900–1,300
+- Output: Top recommendations + purchase links
+- Context Window: 4K
+- Latency: ~3 sec
+- Models: Gemini Flash, GPT-4.1 Mini
+
+## 3. Visualization Agent
+
+**Responsibility:** Generate outfit previews.
+
+- Output: 1024×1024 image
+- Latency: 7–8 sec
+- Model: Google Nano Banana
+
+---
+
+# High-Level Workflow
+
+```text
+User Input
+     |
+     v
+Planning Agent
+     |
+     v
+Structured Outfit Plan
+     |
+     v
+Recommendation Agent
+     |
+     +--> Marketplace Search
+     +--> Product Ranking
+     |
+     v
+Selected links
+     |
+     v
+Visualization Agent
+     |
+     v
+Outfit Preview 
 ```
 
-Next, navigate to your project directory and install the dependencies:
+---
 
-(Optional) Lock the dependencies and install them by using the CLI command:
-```bash
-crewai install
-```
-### Customizing
+# Technology Stack
 
-**Add your `OPENAI_API_KEY` into the `.env` file**
+| Layer | Technology |
+|---------|------------|
+| Mobile App | Android |
+| Backend API | FastAPI |
+| Agent Framework | CrewAI |
+| Planning Models | GPT-4.1 Mini / Claude Sonnet 4 |
+| Recommendation Models | Gemini Flash |
+| Image Generation | Google Nano Banana |
 
-- Modify `src/shopai/config/agents.yaml` to define your agents
-- Modify `src/shopai/config/tasks.yaml` to define your tasks
-- Modify `src/shopai/crew.py` to add your own logic, tools and specific args
-- Modify `src/shopai/main.py` to add custom inputs for your agents and tasks
+---
 
-## Running the Project
+# Future Enhancements
 
-To kickstart your crew of AI agents and begin task execution, run this from the root folder of your project:
-
-```bash
-$ crewai run
-```
-
-This command initializes the ShopAI Crew, assembling the agents and assigning them tasks as defined in your configuration.
-
-This example, unmodified, will run the create a `report.md` file with the output of a research on LLMs in the root folder.
-
-## Understanding Your Crew
-
-The ShopAI Crew is composed of multiple AI agents, each with unique roles, goals, and tools. These agents collaborate on a series of tasks, defined in `config/tasks.yaml`, leveraging their collective skills to achieve complex objectives. The `config/agents.yaml` file outlines the capabilities and configurations of each agent in your crew.
-
-## Support
-
-For support, questions, or feedback regarding the Shopai Crew or crewAI.
-- Visit our [documentation](https://docs.crewai.com)
-- Reach out to us through our [GitHub repository](https://github.com/joaomdmoura/crewai)
-- [Join our Discord](https://discord.com/invite/X4JWnZnxPb)
-- [Chat with our docs](https://chatg.pt/DWjSBZn)
-
-Let's create wonders together with the power and simplicity of crewAI.
+- Personalized style memory
+- AI stylist chat experience
+- Social outfit sharing

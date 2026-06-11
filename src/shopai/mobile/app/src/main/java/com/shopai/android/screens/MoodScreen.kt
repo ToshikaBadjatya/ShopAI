@@ -1,7 +1,10 @@
 package com.shopai.android.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -18,9 +21,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.shopai.android.data.model.OutfitPlanResponse
 import com.shopai.android.reusables.ChipSelector
 import com.shopai.android.reusables.PrimaryButton
 import com.shopai.android.reusables.ShopAITopBar
@@ -37,8 +42,10 @@ fun MoodScreen(
     onMoodTextChanged: (String) -> Unit = {},
     selectedVibes: Set<String> = emptySet(),
     onVibeToggled: (String) -> Unit = {},
-    goToProfile:()-> Unit,
-    isLoading: Boolean = false
+    goToProfile: () -> Unit,
+    isLoading: Boolean = false,
+    planIdeas: List<OutfitPlanResponse> = emptyList(),
+    onOutfitSelected: (OutfitPlanResponse) -> Unit = {}
 ) {
     val quickVibes = listOf(
         "Summer Brunch", "Corporate Chic", "Late Night Party", "Scandi Minimal", "Gorpcore"
@@ -173,14 +180,30 @@ fun MoodScreen(
                     multiSelect = false
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                if (planIdeas.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(28.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    TrendCard(label = "Trending Now", imageUrl = "", modifier = Modifier.weight(1f))
-                    TrendCard(label = "Recently Saved", imageUrl = "", modifier = Modifier.weight(1f))
+                    Text(
+                        text = "✦ Outfit Ideas",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF1A1A2E)
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(end = 4.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(planIdeas) { idea ->
+                            OutfitIdeaCard(
+                                idea = idea,
+                                onClick = { onOutfitSelected(idea) }
+                            )
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -200,6 +223,58 @@ fun MoodScreen(
                     } else {
                         PrimaryButton(text = "⚡ Plan My Outfit", onClick = onPlanOutfit)
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OutfitIdeaCard(
+    idea: OutfitPlanResponse,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .width(220.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+    ) {
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .background(ShopAIRed)
+            )
+            Column(modifier = Modifier.padding(14.dp)) {
+                Text(
+                    text = idea.outfitName,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1A1A2E),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = idea.description,
+                    fontSize = 12.sp,
+                    color = TextSecondary,
+                    lineHeight = 17.sp,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (idea.tags.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = idea.tags.take(2).joinToString(" · "),
+                        fontSize = 11.sp,
+                        color = ShopAIRed,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
         }

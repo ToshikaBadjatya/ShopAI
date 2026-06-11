@@ -1,7 +1,6 @@
 package com.shopai.android.viewmodel
 
 import android.app.Application
-import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.shopai.android.data.api.RetrofitClient
@@ -24,8 +23,11 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    private val _planResult = MutableStateFlow<OutfitPlanResponse?>(null)
-    val planResult: StateFlow<OutfitPlanResponse?> = _planResult.asStateFlow()
+    private val     _planIdeas = MutableStateFlow<List<OutfitPlanResponse>>(emptyList())
+    val planIdeas: StateFlow<List<OutfitPlanResponse>> = _planIdeas.asStateFlow()
+
+    private val _selectedOutfit = MutableStateFlow<OutfitPlanResponse?>(null)
+    val selectedOutfit: StateFlow<OutfitPlanResponse?> = _selectedOutfit.asStateFlow()
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
@@ -46,6 +48,7 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
+            _planIdeas.value = emptyList()
             try {
                 val profile = Session.getProfile(getApplication())
                 val vibesText = _selectedVibes.value.joinToString(", ")
@@ -57,11 +60,8 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 val request = OutfitPlanRequest(moodText = fullMoodText, profile = profile)
                 val response = RetrofitClient.apiService.planOutfit(request)
-                Log.e("response","response is $response")
                 if (response.isSuccessful) {
-                    val result = response.body()
-                    OutfitRepository.lastPlanResult = result
-                    _planResult.value = result
+                    _planIdeas.value = response.body() ?: emptyList()
                 } else {
                     _error.value = "Failed to plan outfit: ${response.code()}"
                 }
@@ -71,5 +71,14 @@ class MoodViewModel(application: Application) : AndroidViewModel(application) {
                 _isLoading.value = false
             }
         }
+    }
+
+    fun selectOutfit(outfit: OutfitPlanResponse) {
+        OutfitRepository.lastPlanResult = outfit
+        _selectedOutfit.value = outfit
+    }
+
+    fun clearSelectedOutfit() {
+        _selectedOutfit.value = null
     }
 }
