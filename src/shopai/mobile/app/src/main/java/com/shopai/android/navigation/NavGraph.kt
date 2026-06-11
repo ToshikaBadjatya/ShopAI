@@ -92,6 +92,9 @@ fun NavGraph(
             val viewModel: RecommendationViewModel = viewModel()
             val recommendation by viewModel.recommendation.collectAsState()
             val isFavorite by viewModel.isFavorite.collectAsState()
+            val selectedItems by viewModel.selectedItems.collectAsState()
+            val links by viewModel.links.collectAsState()
+            val isLoadingLinks by viewModel.isLoadingLinks.collectAsState()
 
             RecommendationScreen(
                 onBack = {
@@ -105,7 +108,12 @@ fun NavGraph(
                 },
                 isFavorite = isFavorite,
                 onFavoriteToggled = { viewModel.toggleFavorite() },
-                outfitPlan = recommendation
+                outfitPlan = recommendation,
+                selectedItems = selectedItems,
+                onItemToggled = { viewModel.toggleItem(it) },
+                onGetLinks = { viewModel.getLinks() },
+                isLoadingLinks = isLoadingLinks,
+                links = links
             )
         }
 

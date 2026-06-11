@@ -81,6 +81,18 @@ class VisualizeData(BaseModel):
     colorPalette: List[str] = []
 
 
+class GetLinksRequest(BaseModel):
+    outfitId: str = ""
+    selectedItems: List[str] = []
+
+
+class ProductLink(BaseModel):
+    name: str = ""
+    url: str = ""
+    price: str = ""
+    platform: str = ""
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -154,6 +166,21 @@ def _recommendation_products(recommendation: dict) -> List[ProductData]:
     return products
 
 
+def _recommendation_to_links(recommendation: dict) -> List[ProductLink]:
+    recs = recommendation.get("recommendations", [])
+    links: List[ProductLink] = []
+    for entry in recs:
+        for p in entry.get("products", []):
+            url = p.get("product_url", "")
+            links.append(ProductLink(
+                name=p.get("product_name", ""),
+                url=url,
+                price=p.get("product_price", ""),
+                platform=_platform_from_url(url),
+            ))
+    return links
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -206,6 +233,37 @@ async def get_recommendations():
     products = _recommendation_products(recommendation)
 
     return _planning_to_response(plan_id, planning, outfit_idx=0, products=products)
+
+
+@app.post("/outfit/links", response_model=List[ProductLink])
+async def get_links(request: GetLinksRequest):
+    if not _current_outfit_id or _current_outfit_id not in _outfit_store:
+        raise HTTPException(status_code=404, detail="No outfit plan found. Call /outfit/plan first.")
+
+    plan_id = _current_outfit_id
+    entry = _outfit_store[plan_id]
+    inputs = entry["inputs"]
+
+    selected_planning = {
+        "outfits": [
+            {
+                "outfit_name": "Selected Items",
+                "items": request.selectedItems,
+                "rationale": "User-selected items for link lookup",
+            }
+        ]
+    }
+
+    loop = asyncio.get_event_loop()
+    try:
+        recommendation = await loop.run_in_executor(
+            None, lambda: Shopai().run_recommendation(inputs, selected_planning)
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Recommendation agent failed: {exc}")
+
+    _outfit_store[plan_id]["recommendation"] = recommendation
+    return _recommendation_to_links(recommendation)
 
 
 @app.get("/outfit/visualize/{outfitId:path}", response_model=VisualizeData)

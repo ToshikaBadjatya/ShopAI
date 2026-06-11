@@ -36,3 +36,15 @@ data class VisualizeData(
     val items: List<ProductData> = emptyList(),
     val colorPalette: List<String> = emptyList()
 )
+
+data class ProductLink(
+    val name: String = "",
+    val url: String = "",
+    val price: String = "",
+    val platform: String = ""
+)
+
+data class GetLinksRequest(
+    val outfitId: String,
+    val selectedItems: List<String>
+)

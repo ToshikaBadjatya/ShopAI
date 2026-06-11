@@ -1,7 +1,9 @@
 package com.shopai.android.data.api
 
+import com.shopai.android.data.model.GetLinksRequest
 import com.shopai.android.data.model.OutfitPlanRequest
 import com.shopai.android.data.model.OutfitPlanResponse
+import com.shopai.android.data.model.ProductLink
 import com.shopai.android.data.model.UserProfile
 import com.shopai.android.data.model.VisualizeData
 import retrofit2.Response
@@ -20,6 +22,9 @@ interface ShopAIApiService {
 
     @GET("outfit/recommendations")
     suspend fun getRecommendations(): Response<OutfitPlanResponse>
+
+    @POST("outfit/links")
+    suspend fun getLinks(@Body request: GetLinksRequest): Response<List<ProductLink>>
 
     @GET("outfit/visualize/{outfitId}")
     suspend fun visualizeOutfit(@Path("outfitId") outfitId: String): Response<VisualizeData>
