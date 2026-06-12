@@ -243,26 +243,32 @@ fun RecommendationScreen(
                 shadowElevation = 8.dp,
                 color = Color.White
             ) {
-                Box(
-                    modifier = Modifier
-                        .padding(16.dp)
-                        .fillMaxWidth()
-                        .height(48.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (isLoadingLinks) {
-                        CircularProgressIndicator(
-                            color = ShopAIRed,
-                            modifier = Modifier.size(28.dp),
-                            strokeWidth = 3.dp
-                        )
-                    } else {
-                        PrimaryButton(
-                            text = if (selectedItems.isEmpty()) "Select items to Get Links"
-                                   else "Get Links (${selectedItems.size})",
-                            onClick = onGetLinks
-                        )
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isLoadingLinks) {
+                            CircularProgressIndicator(
+                                color = ShopAIRed,
+                                modifier = Modifier.size(28.dp),
+                                strokeWidth = 3.dp
+                            )
+                        } else {
+                            PrimaryButton(
+                                text = if (selectedItems.isEmpty()) "Select items to Get Links"
+                                       else "Get Links (${selectedItems.size})",
+                                onClick = onGetLinks
+                            )
+                        }
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    PrimaryButton(
+                        text = "Visualize Outfit",
+                        onClick = { onVisualize(outfitPlan?.outfitId ?: "") }
+                    )
                 }
             }
         }

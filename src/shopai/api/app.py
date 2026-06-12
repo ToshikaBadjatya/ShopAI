@@ -278,17 +278,21 @@ async def visualize_outfit(outfitId: str):
     entry = _outfit_store.get(plan_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Outfit not found.")
-    if "recommendation" not in entry:
-        raise HTTPException(status_code=400, detail="Recommendations not ready. Call /outfit/recommendations first.")
 
     planning = entry["planning"]
-    recommendation = entry["recommendation"]
     inputs = entry["inputs"]
+
+    outfits = planning.get("outfits", [])
+    outfit = outfits[outfit_idx] if outfit_idx < len(outfits) else {}
+    outfit_name = outfit.get("outfit_name", "")
+    items = outfit.get("items", [])
+    outfit_description = f"{outfit_name}: {', '.join(items)}" if items else outfit_name
+    body_type = inputs.get("body_type", "average")
 
     loop = asyncio.get_event_loop()
     try:
         viz = await loop.run_in_executor(
-            None, lambda: Shopai().run_visualization(inputs, planning, recommendation)
+            None, lambda: Shopai().run_visualization(outfit_description, body_type)
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Visualization agent failed: {exc}")
@@ -296,8 +300,7 @@ async def visualize_outfit(outfitId: str):
     image_path = viz.get("image_path", "")
     visual_url = f"/static/{os.path.basename(image_path)}" if image_path else ""
 
-    outfits = planning.get("outfits", [])
-    outfit_name = outfits[outfit_idx].get("outfit_name", "") if outfit_idx < len(outfits) else ""
+    recommendation = entry.get("recommendation", {})
     products = _recommendation_products(recommendation)
 
     return VisualizeData(

@@ -212,65 +212,27 @@ class Shopai():
         parsed = self._parse_recommendation_output(raw)
         return parsed
 
-    def run_visualization(
-        self,
-        inputs: dict,
-        planning_output: dict,
-        recommendation_output: dict,
-    ) -> dict:
+    def run_visualization(self, outfit_description: str, body_type: str) -> dict:
         """Run only the visualization agent/task.
 
         Args:
-            inputs: same input dict as run_planning.
-            planning_output: dict returned by run_planning.
-            recommendation_output: dict returned by run_recommendation.
+            outfit_description: plain-text description of the outfit items.
+            body_type: user's body type, e.g. 'slim', 'curvy', 'athletic'.
 
         Returns:
-            {
-                "image_path": "...",
-                "markdown_report": "...",
-                "raw": "..."
-            }
+            {"image_path": "...", "markdown_report": "...", "raw": "..."}
         """
-        planning_json = json.dumps(planning_output.get("outfits", []), indent=2)
-        recommendation_json = json.dumps(
-            recommendation_output.get("recommendations", []), indent=2
-        )
-
         description = (
-            "Transform the shopping plan and product recommendations into a polished "
-            "visual markdown report for {shopping_request}.\n\n"
-            "--- PLANNING OUTPUT ---\n"
-            "{planning_json}\n\n"
-            "--- RECOMMENDATION OUTPUT ---\n"
-            "{recommendation_json}\n\n"
-            "Use markdown tables, clear sections, and an easy-to-scan layout that "
-            "highlights the best options.\n\n"
-            "Additionally, call the outfit_visualizer tool ONCE with:\n"
-            "  - product_url: the FIRST product URL found in the recommendation output above\n"
-            "  - outfit_description: a concise plain-text summary of the full outfit\n"
-            "  - gender: {gender}\n"
-            "  - height: {height}\n"
-            "  - body_type: {body_type}\n\n"
-            "The tool will generate a 1024x1024 model image dressed in the outfit and "
-            "return the saved file path. Embed the image in the markdown report directly "
-            "after the outfit summary section using standard markdown image syntax:\n"
-            "![Outfit Visualization](<path returned by tool>)"
-        ).format(
-            planning_json=planning_json,
-            recommendation_json=recommendation_json,
-            **inputs,
+            f"Call the outfit_visualizer tool ONCE with:\n"
+            f"  - outfit_description: \"{outfit_description}\"\n"
+            f"  - body_type: \"{body_type}\"\n\n"
+            "Return the file path or URL returned by the tool."
         )
 
         t = Task(
             description=description,
-            expected_output=(
-                "A beautifully formatted markdown shopping guide with comparison tables, "
-                "a prioritized shortlist, a final summary, and an embedded outfit "
-                "visualization image. Formatted as markdown without '```'."
-            ),
+            expected_output="The saved image file path or URL returned by the outfit_visualizer tool.",
             agent=self.visualize_agent(),
-            output_file='src/shopai/output/shopping_guide.md',
         )
 
         single_crew = Crew(
@@ -280,7 +242,7 @@ class Shopai():
             verbose=True,
         )
 
-        result = single_crew.kickoff(inputs=inputs)
+        result = single_crew.kickoff()
         raw = str(result)
         parsed = self._parse_visualization_output(raw)
         return parsed
