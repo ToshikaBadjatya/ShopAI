@@ -4,7 +4,7 @@ Endpoints match the Android ShopAIApiService exactly:
   POST /profile/update
   POST /outfit/plan
   GET  /outfit/recommendations
-  GET  /outfit/visualize/{outfitId}
+  POST /outfit/visualize
 """
 
 from __future__ import annotations
@@ -266,48 +266,33 @@ async def get_links(request: GetLinksRequest):
     return _recommendation_to_links(recommendation)
 
 
-@app.get("/outfit/visualize/{outfitId:path}", response_model=VisualizeData)
-async def visualize_outfit(outfitId: str):
-    if ":" in outfitId:
-        plan_id, _, idx_str = outfitId.rpartition(":")
-        outfit_idx = int(idx_str) if idx_str.isdigit() else 0
-    else:
-        plan_id = outfitId
-        outfit_idx = 0
+class VisualizeRequest(BaseModel):
+    outfitDescription: str
+    bodyType: str
+    height: str = ""
 
-    entry = _outfit_store.get(plan_id)
-    if not entry:
-        raise HTTPException(status_code=404, detail="Outfit not found.")
 
-    planning = entry["planning"]
-    inputs = entry["inputs"]
-
-    outfits = planning.get("outfits", [])
-    outfit = outfits[outfit_idx] if outfit_idx < len(outfits) else {}
-    outfit_name = outfit.get("outfit_name", "")
-    items = outfit.get("items", [])
-    outfit_description = f"{outfit_name}: {', '.join(items)}" if items else outfit_name
-    body_type = inputs.get("body_type", "average")
-
+@app.post("/outfit/visualize", response_model=VisualizeData)
+async def visualize_outfit(req: VisualizeRequest):
     loop = asyncio.get_event_loop()
     try:
         viz = await loop.run_in_executor(
-            None, lambda: Shopai().run_visualization(outfit_description, body_type)
+            None, lambda: Shopai().run_visualization(req.outfitDescription, req.bodyType, req.height)
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Visualization agent failed: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    if error := viz.get("error"):
+        raise HTTPException(status_code=422, detail=error)
 
     image_path = viz.get("image_path", "")
     visual_url = f"/static/{os.path.basename(image_path)}" if image_path else ""
 
-    recommendation = entry.get("recommendation", {})
-    products = _recommendation_products(recommendation)
-
     return VisualizeData(
-        outfitId=outfitId,
+        outfitId="",
         visualUrl=visual_url,
-        outfitName=outfit_name,
-        items=products,
+        outfitName=req.outfitDescription,
+        items=[],
         colorPalette=[],
     )
 

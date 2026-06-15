@@ -212,20 +212,23 @@ class Shopai():
         parsed = self._parse_recommendation_output(raw)
         return parsed
 
-    def run_visualization(self, outfit_description: str, body_type: str) -> dict:
+    def run_visualization(self, outfit_description: str, body_type: str, height: str = "") -> dict:
         """Run only the visualization agent/task.
 
         Args:
             outfit_description: plain-text description of the outfit items.
             body_type: user's body type, e.g. 'slim', 'curvy', 'athletic'.
+            height: user's height, e.g. '5\'6"'.
 
         Returns:
             {"image_path": "...", "markdown_report": "...", "raw": "..."}
         """
+        height_line = f"  - height: \"{height}\"\n" if height else ""
         description = (
             f"Call the outfit_visualizer tool ONCE with:\n"
             f"  - outfit_description: \"{outfit_description}\"\n"
-            f"  - body_type: \"{body_type}\"\n\n"
+            f"  - body_type: \"{body_type}\"\n"
+            f"{height_line}\n"
             "Return the file path or URL returned by the tool."
         )
 
@@ -330,18 +333,36 @@ class Shopai():
         return {"recommendations": recommendations, "raw": raw}
 
     def _parse_visualization_output(self, raw: str) -> dict:
-        """Extract image path and markdown report from visualization raw output.
+        """Extract image path or error from visualization raw output.
 
         Returns:
             {"image_path": "...", "markdown_report": "...", "raw": raw}
+            or {"error": "...", "raw": raw} if the agent reported a failure.
         """
-        # Try to find an image path embedded in the text
+        # Check if agent returned a JSON error object
+        try:
+            import json as _json
+            json_match = re.search(r'\{[^{}]+\}', raw, re.DOTALL)
+            if json_match:
+                parsed_json = _json.loads(json_match.group())
+                if "error" in parsed_json:
+                    return {"error": parsed_json["error"], "raw": raw}
+                if "image_path" in parsed_json:
+                    return {
+                        "image_path": parsed_json["image_path"],
+                        "markdown_report": raw.strip(),
+                        "raw": raw,
+                    }
+        except Exception:
+            pass
+
+        # Fall back to regex extraction
         image_path = ""
         path_patterns = [
-            r'!\[.*?\]\(([^)]+\.png)\)',          # markdown image syntax
-            r'saved to:\s*([^\n]+\.png)',           # "saved to: /path/file.png"
-            r'(src/shopai/output/[^\s\n]+\.png)',   # relative output path
-            r'(/[^\s\n]+\.png)',                    # absolute path ending in .png
+            r'!\[.*?\]\(([^)]+\.png)\)',
+            r'saved to:\s*([^\n]+\.png)',
+            r'(src/shopai/output/[^\s\n]+\.png)',
+            r'(/[^\s\n]+\.png)',
         ]
         for pattern in path_patterns:
             match = re.search(pattern, raw)
@@ -349,11 +370,8 @@ class Shopai():
                 image_path = match.group(1).strip()
                 break
 
-        # The markdown report is the full raw output from the visualize agent
-        markdown_report = raw.strip()
-
         return {
             "image_path": image_path,
-            "markdown_report": markdown_report,
+            "markdown_report": raw.strip(),
             "raw": raw,
         }

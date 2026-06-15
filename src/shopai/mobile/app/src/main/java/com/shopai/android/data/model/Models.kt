@@ -48,3 +48,9 @@ data class GetLinksRequest(
     val outfitId: String,
     val selectedItems: List<String>
 )
+
+data class VisualizeRequest(
+    val outfitDescription: String,
+    val bodyType: String,
+    val height: String
+)

@@ -31,7 +31,7 @@ import com.shopai.android.ui.theme.TextSecondary
 fun RecommendationScreen(
     onBack: () -> Unit = {},
     onRegenerate: () -> Unit = {},
-    onVisualize: (outfitId: String) -> Unit = {},
+    onVisualize: (outfitDescription: String) -> Unit = {},
     isFavorite: Boolean = false,
     onFavoriteToggled: () -> Unit = {},
     outfitPlan: OutfitPlanResponse? = null,
@@ -267,7 +267,12 @@ fun RecommendationScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     PrimaryButton(
                         text = "Visualize Outfit",
-                        onClick = { onVisualize(outfitPlan?.outfitId ?: "") }
+                        onClick = {
+                            val desc = if (outfitPlan != null)
+                                "${outfitPlan.outfitName}: ${outfitPlan.description}"
+                            else outfitName
+                            onVisualize(desc)
+                        }
                     )
                 }
             }

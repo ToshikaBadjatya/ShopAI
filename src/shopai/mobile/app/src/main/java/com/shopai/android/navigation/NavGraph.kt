@@ -4,14 +4,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
-import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
 import com.shopai.android.data.model.VisualizeData
+import com.shopai.android.data.repository.OutfitRepository
+import com.shopai.android.prefs.Session
 import com.shopai.android.screens.MoodScreen
 import com.shopai.android.screens.ProfileScreen
 import com.shopai.android.screens.RecommendationScreen
@@ -25,9 +26,7 @@ sealed class Screen(val route: String) {
     object Mood : Screen("mood")
     object Profile : Screen("profile")
     object Recommendation : Screen("recommendation")
-    object Visualize : Screen("visualize/{outfitId}") {
-        fun createRoute(outfitId: String) = "visualize/$outfitId"
-    }
+    object Visualize : Screen("visualize")
 }
 
 @Composable
@@ -103,8 +102,9 @@ fun NavGraph(
                     }
                 },
                 onRegenerate = { viewModel.regenerate() },
-                onVisualize = { outfitId ->
-                    navController.navigate(Screen.Visualize.createRoute(outfitId))
+                onVisualize = { outfitDescription ->
+                    OutfitRepository.pendingVisualizeDescription = outfitDescription
+                    navController.navigate(Screen.Visualize.route)
                 },
                 isFavorite = isFavorite,
                 onFavoriteToggled = { viewModel.toggleFavorite() },
@@ -117,16 +117,19 @@ fun NavGraph(
             )
         }
 
-        composable(
-            route = Screen.Visualize.route,
-            arguments = listOf(navArgument("outfitId") { type = NavType.StringType })
-        ) { backStackEntry ->
-            val outfitId = backStackEntry.arguments?.getString("outfitId") ?: ""
+        composable(route = Screen.Visualize.route) {
+            val context = LocalContext.current
+            val profile = Session.getProfile(context)
             val viewModel: VisualizeViewModel = viewModel()
             val visualizeData by viewModel.visualizeData.collectAsState()
+            val description = OutfitRepository.pendingVisualizeDescription
 
-            LaunchedEffect(outfitId) {
-                viewModel.loadVisualize(outfitId)
+            LaunchedEffect(description) {
+                viewModel.loadVisualize(
+                    outfitDescription = description,
+                    bodyType = profile.bodyType,
+                    height = profile.height
+                )
             }
 
             VisualizeScreen(

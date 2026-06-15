@@ -58,7 +58,7 @@ fun VisualizeScreen(
                     ) {
                         AsyncImage(
                             model = visualizeData.visualUrl,
-                            contentDescription = visualizeData.outfitName,
+                            contentDescription = "",
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
                         )

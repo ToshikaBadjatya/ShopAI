@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.shopai.android.data.api.RetrofitClient
 import com.shopai.android.data.model.VisualizeData
+import com.shopai.android.data.model.VisualizeRequest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,12 +20,17 @@ class VisualizeViewModel : ViewModel() {
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
-    fun loadVisualize(outfitId: String) {
+    fun loadVisualize(outfitDescription: String, bodyType: String, height: String) {
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
             try {
-                val response = RetrofitClient.apiService.visualizeOutfit(outfitId)
+                val request = VisualizeRequest(
+                    outfitDescription = outfitDescription,
+                    bodyType = bodyType,
+                    height = height
+                )
+                val response = RetrofitClient.apiService.visualizeOutfit(request)
                 if (response.isSuccessful) {
                     _visualizeData.value = response.body()
                 } else {
