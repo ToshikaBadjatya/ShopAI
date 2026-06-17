@@ -156,12 +156,13 @@ def _recommendation_products(recommendation: dict) -> List[ProductData]:
     products: List[ProductData] = []
     for i, entry in enumerate(recs):
         for p in entry.get("products", []):
+            url = p.get("product_url") or ""
             products.append(ProductData(
                 id=str(i),
                 imageUrl="",
-                name=p.get("product_name", ""),
-                price=p.get("product_price", ""),
-                platform=_platform_from_url(p.get("product_url", "")),
+                name=p.get("product_name") or "",
+                price=p.get("product_price") or "",
+                platform=_platform_from_url(url),
             ))
     return products
 
@@ -171,11 +172,11 @@ def _recommendation_to_links(recommendation: dict) -> List[ProductLink]:
     links: List[ProductLink] = []
     for entry in recs:
         for p in entry.get("products", []):
-            url = p.get("product_url", "")
+            url = p.get("product_url") or ""
             links.append(ProductLink(
-                name=p.get("product_name", ""),
+                name=p.get("product_name") or "",
                 url=url,
-                price=p.get("product_price", ""),
+                price=p.get("product_price") or "",
                 platform=_platform_from_url(url),
             ))
     return links

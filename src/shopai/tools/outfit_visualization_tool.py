@@ -27,6 +27,10 @@ class OutfitVisualizationInput(BaseModel):
         ...,
         description="Body type of the model, e.g. 'slim', 'athletic', 'curvy', 'plus-size'.",
     )
+    height: str = Field(
+        default="",
+        description="Height of the model, e.g. '5\\'6\"' or '5\\'0\" - 5\\'3\"'.",
+    )
 
 
 class OutfitVisualizationTool(BaseTool):
@@ -38,9 +42,10 @@ class OutfitVisualizationTool(BaseTool):
     )
     args_schema: Type[BaseModel] = OutfitVisualizationInput
 
-    def _build_prompt(self, outfit_description: str, body_type: str) -> str:
+    def _build_prompt(self, outfit_description: str, body_type: str, height: str = "") -> str:
+        height_clause = f" approximately {height} tall" if height else ""
         return (
-            f"Full-body fashion photograph of a single model with a {body_type} body type. "
+            f"Full-body fashion photograph of a single model with a {body_type} body type{height_clause}. "
             f"The model is wearing: {outfit_description}. "
             "Standing in a well-lit, neutral studio with clean white background. "
             "Professional fashion editorial style — sharp focus, natural lighting. "
@@ -48,7 +53,7 @@ class OutfitVisualizationTool(BaseTool):
             "No text, watermarks, or logos. Square 1:1 aspect ratio."
         )
 
-    def _run(self, outfit_description: str, body_type: str) -> str:
+    def _run(self, outfit_description: str, body_type: str, height: str = "") -> str:
         try:
             from openai import OpenAI
         except ImportError:
@@ -63,7 +68,7 @@ class OutfitVisualizationTool(BaseTool):
             image_model = image_model[len("openrouter/"):]
         image_model = image_model.replace(":free", "")
 
-        prompt = self._build_prompt(outfit_description, body_type)
+        prompt = self._build_prompt(outfit_description, body_type, height)
 
         try:
             client = OpenAI(
