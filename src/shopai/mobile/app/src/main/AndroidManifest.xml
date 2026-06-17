@@ -5,6 +5,7 @@
         android:allowBackup="true"
         android:label="ShopAI"
         android:usesCleartextTraffic="true"
+        android:theme="@style/Theme.ShopAI"
         >
         <activity
             android:name=".MainActivity"

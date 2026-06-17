@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.ShopAI" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#FFF5F5F7</item>
+        <item name="android:statusBarColor">@android:color/holo_red_dark</item>
+        <item name="android:navigationBarColor">#FFFFFFFF</item>
+    </style>
+</resources>

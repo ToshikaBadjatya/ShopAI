@@ -1,6 +1,7 @@
 """
 Outfit Visualization Tool
-Generates an outfit visualization image using the configured IMAGE_MODEL via OpenRouter.
+Generates an outfit visualization image using the configured IMAGE_MODEL via the
+Hugging Face Inference API (other agents keep using OpenRouter).
 Inputs: outfit_description and body_type, height,from user object only.
 """
 
@@ -55,48 +56,26 @@ class OutfitVisualizationTool(BaseTool):
 
     def _run(self, outfit_description: str, body_type: str, height: str = "") -> str:
         try:
-            from openai import OpenAI
+            from huggingface_hub import InferenceClient
         except ImportError:
-            return "Error: 'openai' package is not installed. Run: uv add openai"
+            return "Error: 'huggingface_hub' package is not installed. Run: uv add huggingface_hub"
 
-        api_key = os.environ.get("OPENROUTER_API_KEY")
+        api_key = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_API_KEY")
         if not api_key:
-            return "Error: OPENROUTER_API_KEY not set in environment."
+            return "Error: HF_TOKEN not set in environment."
 
-        image_model = os.environ.get("IMAGE_MODEL", "x-ai/grok-2-image-generation")
-        if image_model.startswith("openrouter/"):
-            image_model = image_model[len("openrouter/"):]
-        image_model = image_model.replace(":free", "")
+        image_model = os.environ.get("IMAGE_MODEL", "black-forest-labs/FLUX.1-schnell")
 
         prompt = self._build_prompt(outfit_description, body_type, height)
 
         try:
-            client = OpenAI(
-                api_key=api_key,
-                base_url="https://openrouter.ai/api/v1",
-            )
-
-            response = client.images.generate(
-                model=image_model,
-                prompt=prompt,
-                n=1,
-                size="1024x1024",
-                response_format="b64_json",
-            )
-
-            b64_data = response.data[0].b64_json
-            if not b64_data:
-                # Some models return a URL instead
-                image_url = response.data[0].url or ""
-                return f"Outfit visualization URL: {image_url}"
-
-            import base64
-            image_bytes = base64.b64decode(b64_data)
+            client = InferenceClient(token=api_key)
+            image = client.text_to_image(prompt, model=image_model)
 
             OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
             filename = f"outfit_visualization_{uuid.uuid4().hex[:8]}.png"
             output_file = OUTPUT_DIR / filename
-            output_file.write_bytes(image_bytes)
+            image.save(output_file)
 
             return (
                 f"Outfit visualization saved to: {output_file}\n"

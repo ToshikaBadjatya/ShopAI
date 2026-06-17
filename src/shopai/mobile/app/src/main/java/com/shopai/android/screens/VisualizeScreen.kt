@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.shopai.android.data.api.RetrofitClient
 import com.shopai.android.data.model.ProductData
 import com.shopai.android.data.model.VisualizeData
 import com.shopai.android.reusables.ShopAITopBar
@@ -38,6 +39,10 @@ fun VisualizeScreen(
 ) {
     val fallbackPalette = listOf("#E53935", "#212121", "#9E9E9E", "#F5F5DC", "#1A237E")
     val palette = if (visualizeData.colorPalette.isNotEmpty()) visualizeData.colorPalette else fallbackPalette
+    // Backend returns a relative path like "/static/xxx.png"; resolve against the API host.
+    val imageUrl = visualizeData.visualUrl.let { url ->
+        if (url.startsWith("http")) url else RetrofitClient.BASE_URL.removeSuffix("/") + url
+    }
 
     Scaffold(
         topBar = { ShopAITopBar(showBack = true, onBack = onBack) },
@@ -53,11 +58,11 @@ fun VisualizeScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(280.dp)
+                            .height(480.dp)
                             .background(Color(0xFF2A2A3E))
                     ) {
                         AsyncImage(
-                            model = visualizeData.visualUrl,
+                            model = imageUrl,
                             contentDescription = "",
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
@@ -86,66 +91,67 @@ fun VisualizeScreen(
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                             )
                         }
-                        Text(
+//
+                    }
+                }
+                item {
+                    Text(
                             text = visualizeData.outfitName.ifEmpty { outfitName },
-                            color = Color.White,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
+                            color = Color.Black,
+                            fontSize = 12.sp,
                             modifier = Modifier
-                                .align(Alignment.BottomStart)
                                 .padding(16.dp)
                         )
-                    }
                 }
 
-                item {
-                    Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
-                        Text(
-                            text = "Color Palette",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            palette.forEach { hex ->
-                                val color = try {
-                                    Color(android.graphics.Color.parseColor(hex))
-                                } catch (e: Exception) {
-                                    Color.Gray
-                                }
-                                Box(
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(CircleShape)
-                                        .background(color)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                item {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 20.dp),
-                        color = DividerColor
-                    )
-                    Text(
-                        text = "Outfit Breakdown",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
-                    )
-                }
-
-                items(visualizeData.items) { item ->
-                    VisualizeItemRow(item = item)
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 20.dp),
-                        color = DividerColor
-                    )
-                }
+//                item {
+//                    Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+//                        Text(
+//                            text = "Color Palette",
+//                            fontSize = 16.sp,
+//                            fontWeight = FontWeight.Bold,
+//                            color = TextPrimary
+//                        )
+//                        Spacer(modifier = Modifier.height(12.dp))
+//                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+//                            palette.forEach { hex ->
+//                                val color = try {
+//                                    Color(android.graphics.Color.parseColor(hex))
+//                                } catch (e: Exception) {
+//                                    Color.Gray
+//                                }
+//                                Box(
+//                                    modifier = Modifier
+//                                        .size(40.dp)
+//                                        .clip(CircleShape)
+//                                        .background(color)
+//                                )
+//                            }
+//                        }
+//                    }
+//                }
+//
+//                item {
+//                    HorizontalDivider(
+//                        modifier = Modifier.padding(horizontal = 20.dp),
+//                        color = DividerColor
+//                    )
+//                    Text(
+//                        text = "Outfit Breakdown",
+//                        fontSize = 18.sp,
+//                        fontWeight = FontWeight.Bold,
+//                        color = TextPrimary,
+//                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
+//                    )
+//                }
+//
+//                items(visualizeData.items) { item ->
+//                    VisualizeItemRow(item = item)
+//                    HorizontalDivider(
+//                        modifier = Modifier.padding(horizontal = 20.dp),
+//                        color = DividerColor
+//                    )
+//                }
             }
 
             Surface(

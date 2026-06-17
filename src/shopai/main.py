@@ -122,10 +122,25 @@ def run_api():
             "Install it with: uv add uvicorn"
         )
 
+    import tomllib
+    from pathlib import Path
+
+    _pyproject = Path(__file__).parent.parent.parent / "pyproject.toml"
+    _cfg: dict = {}
+    if _pyproject.exists():
+        with open(_pyproject, "rb") as f:
+            _cfg = tomllib.load(f).get("tool", {}).get("shopai", {})
+
+    host = _cfg.get("host", "0.0.0.0")
+    port = int(_cfg.get("port", 8000))
+    base_url = _cfg.get("base_url", f"http://localhost:{port}")
+
+    print(f"\n  ShopAI API → {base_url}\n")
+
     uvicorn.run(
         "shopai.api.app:app",
-        host="0.0.0.0",
-        port=8000,
+        host=host,
+        port=port,
         reload=True,
     )
 
