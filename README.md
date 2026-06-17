@@ -197,30 +197,8 @@ within a defined time window (1 hour).
 
 # High-Level Workflow
 
-```text
-User Input
-     |
-     v
-Planning Agent
-     |
-     v
-Structured Outfit Plan
-     |
-     v
-Recommendation Agent
-     |
-     +--> Marketplace Search
-     +--> Product Ranking
-     |
-     v
-Selected links
-     |
-     v
-Visualization Agent
-     |
-     v
-Outfit Preview 
-```
+<img width="1450" height="615" alt="Screenshot 2026-06-17 at 7 08 36 PM" src="https://github.com/user-attachments/assets/ca20bf5f-cb04-420c-ac5e-dc5b5d6eeeac" />
+
 
 ---
 
