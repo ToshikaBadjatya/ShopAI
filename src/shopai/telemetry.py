@@ -1,25 +1,20 @@
 import os
 
-from phoenix.otel import register
+from arize.otel import register
 
 
 def setup_telemetry() -> None:
-    """Register OpenTelemetry tracing to Phoenix Cloud, if configured.
+    """Register OpenTelemetry tracing to Arize AX, if configured.
 
-    Reads PHOENIX_API_KEY (required) and PHOENIX_COLLECTOR_ENDPOINT
-    (optional) from the environment. If PHOENIX_API_KEY is not set,
-    tracing is skipped and a warning is printed instead of raising, so
-    the crew keeps working without Phoenix configured.
+    Reads ARIZE_API_KEY and ARIZE_SPACE_ID (both required) from the
+    environment. If either is not set, tracing is skipped and a warning is
+    printed instead of raising, so the crew keeps working without Arize
+    configured.
     """
-    api_key = os.environ.get("PHOENIX_API_KEY")
-    if not api_key:
-        print("Phoenix telemetry disabled: PHOENIX_API_KEY not set")
+    api_key = os.environ.get("ARIZE_API_KEY")
+    space_id = os.environ.get("ARIZE_SPACE_ID")
+    if not api_key or not space_id:
+        print("Arize telemetry disabled: ARIZE_API_KEY and ARIZE_SPACE_ID must both be set")
         return
 
-    kwargs = {"project_name": "shopai", "auto_instrument": True}
-
-    endpoint = os.environ.get("PHOENIX_COLLECTOR_ENDPOINT")
-    if endpoint:
-        kwargs["endpoint"] = endpoint
-
-    register(**kwargs)
+    register(project_name="shopai", auto_instrument=True)

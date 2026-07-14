@@ -23,6 +23,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from shopai.crew import Shopai
+from shopai.telemetry import setup_telemetry
+
+setup_telemetry()
 
 app = FastAPI(title="ShopAI", version="0.1.0")
 

@@ -3,8 +3,11 @@ import sys
 import warnings
 
 from shopai.crew import Shopai
+from shopai.telemetry import setup_telemetry
 
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
+
+setup_telemetry()
 
 
 def run():

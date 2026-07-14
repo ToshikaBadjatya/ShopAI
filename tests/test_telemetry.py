@@ -4,35 +4,34 @@ from shopai import telemetry
 
 
 def test_setup_telemetry_skips_when_no_api_key(monkeypatch, capsys):
-    monkeypatch.delenv("PHOENIX_API_KEY", raising=False)
+    monkeypatch.delenv("ARIZE_API_KEY", raising=False)
+    monkeypatch.setenv("ARIZE_SPACE_ID", "test-space")
 
     with patch("shopai.telemetry.register") as mock_register:
         telemetry.setup_telemetry()
 
     mock_register.assert_not_called()
     captured = capsys.readouterr()
-    assert "PHOENIX_API_KEY not set" in captured.out
+    assert "ARIZE_API_KEY and ARIZE_SPACE_ID must both be set" in captured.out
 
 
-def test_setup_telemetry_registers_when_api_key_present(monkeypatch):
-    monkeypatch.setenv("PHOENIX_API_KEY", "test-key")
-    monkeypatch.delenv("PHOENIX_COLLECTOR_ENDPOINT", raising=False)
+def test_setup_telemetry_skips_when_no_space_id(monkeypatch, capsys):
+    monkeypatch.setenv("ARIZE_API_KEY", "test-key")
+    monkeypatch.delenv("ARIZE_SPACE_ID", raising=False)
+
+    with patch("shopai.telemetry.register") as mock_register:
+        telemetry.setup_telemetry()
+
+    mock_register.assert_not_called()
+    captured = capsys.readouterr()
+    assert "ARIZE_API_KEY and ARIZE_SPACE_ID must both be set" in captured.out
+
+
+def test_setup_telemetry_registers_when_configured(monkeypatch):
+    monkeypatch.setenv("ARIZE_API_KEY", "test-key")
+    monkeypatch.setenv("ARIZE_SPACE_ID", "test-space")
 
     with patch("shopai.telemetry.register") as mock_register:
         telemetry.setup_telemetry()
 
     mock_register.assert_called_once_with(project_name="shopai", auto_instrument=True)
-
-
-def test_setup_telemetry_passes_custom_endpoint(monkeypatch):
-    monkeypatch.setenv("PHOENIX_API_KEY", "test-key")
-    monkeypatch.setenv("PHOENIX_COLLECTOR_ENDPOINT", "https://custom.example.com")
-
-    with patch("shopai.telemetry.register") as mock_register:
-        telemetry.setup_telemetry()
-
-    mock_register.assert_called_once_with(
-        project_name="shopai",
-        auto_instrument=True,
-        endpoint="https://custom.example.com",
-    )
