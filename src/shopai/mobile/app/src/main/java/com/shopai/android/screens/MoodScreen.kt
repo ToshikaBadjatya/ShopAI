@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.shopai.android.data.model.OutfitPlanResponse
+import com.shopai.android.data.model.QuickVibe
 import com.shopai.android.reusables.ChipSelector
 import com.shopai.android.reusables.PrimaryButton
 import com.shopai.android.reusables.ShopAITopBar
@@ -46,7 +47,8 @@ fun MoodScreen(
     moodText: String = "",
     onMoodTextChanged: (String) -> Unit = {},
     selectedVibes: Set<String> = emptySet(),
-    onVibeToggled: (String) -> Unit = {},
+    quickVibes: List<QuickVibe> = QuickVibe.all,
+    onQuickVibeSelected: (QuickVibe) -> Unit = {},
     goToProfile: () -> Unit,
     isLoading: Boolean = false,
     planIdeas: List<OutfitPlanResponse> = emptyList(),
@@ -54,9 +56,6 @@ fun MoodScreen(
     onViewWardrobe: () -> Unit = {},
     onViewStyleGuide: () -> Unit = {}
 ) {
-    val quickVibes = listOf(
-        "Summer Brunch", "Corporate Chic", "Late Night Party", "Scandi Minimal", "Gorpcore"
-    )
     val stylingTabs = listOf("Occasional Styling", "Everyday Styling")
     var selectedStylingTab by remember { mutableStateOf(stylingTabs.first()) }
 
@@ -227,12 +226,12 @@ fun MoodScreen(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 ChipSelector(
-                    options = quickVibes,
+                    options = quickVibes.map { it.label },
                     selected = selectedVibes,
                     onSelectionChanged = { newSet ->
-                        val added = newSet - selectedVibes
-                        val removed = selectedVibes - newSet
-                        (added + removed).forEach { onVibeToggled(it) }
+                        val toggledLabel = ((newSet - selectedVibes) + (selectedVibes - newSet)).firstOrNull()
+                        val toggledVibe = quickVibes.firstOrNull { it.label == toggledLabel }
+                        toggledVibe?.let(onQuickVibeSelected)
                     },
                     multiSelect = false
                 )
