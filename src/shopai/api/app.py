@@ -3,6 +3,7 @@
 Endpoints match the Android ShopAIApiService exactly:
   POST /profile/update
   POST /outfit/plan
+  POST /outfit/plan/occasional
   GET  /outfit/recommendations
   POST /outfit/visualize
 """
@@ -57,6 +58,10 @@ class UserProfile(BaseModel):
 class OutfitPlanRequest(BaseModel):
     moodText: str
     vibes: List[str] = []
+
+
+class OccasionalOutfitRequest(BaseModel):
+    prompt: str
 
 
 class ProductData(BaseModel):
@@ -170,6 +175,31 @@ def _recommendation_products(recommendation: dict) -> List[ProductData]:
     return products
 
 
+def _recommendation_to_outfit_list(plan_id: str, recommendation: dict) -> List[OutfitPlanResponse]:
+    recs = recommendation.get("recommendations", [])[:5]
+    outfits: List[OutfitPlanResponse] = []
+    for i, entry in enumerate(recs):
+        products = [
+            ProductData(
+                id=str(j),
+                imageUrl="",
+                name=p.get("product_name") or "",
+                price=p.get("product_price") or "",
+                platform=_platform_from_url(p.get("product_url") or ""),
+            )
+            for j, p in enumerate(entry.get("products", []))
+        ]
+        outfits.append(OutfitPlanResponse(
+            outfitId=f"{plan_id}:{i}",
+            outfitName=entry.get("outfit_name", ""),
+            description="",
+            tags=[],
+            heroImageUrl="",
+            products=products,
+        ))
+    return outfits
+
+
 def _recommendation_to_links(recommendation: dict) -> List[ProductLink]:
     recs = recommendation.get("recommendations", [])
     links: List[ProductLink] = []
@@ -213,6 +243,27 @@ async def plan_outfit(request: OutfitPlanRequest):
     _current_outfit_id = plan_id
 
     return _planning_to_outfit_list(plan_id, planning)
+
+
+@app.post("/outfit/plan/occasional", response_model=List[OutfitPlanResponse])
+async def plan_occasional_outfit(request: OccasionalOutfitRequest):
+    global _current_outfit_id
+
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(
+            None, lambda: Shopai().plan_occasional_outfit(request.prompt, _profile)
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Occasional outfit planning failed: {exc}")
+
+    plan_id = str(uuid.uuid4())
+    _outfit_store[plan_id] = {"recommendation": result, "inputs": {"shopping_request": request.prompt}}
+    _current_outfit_id = plan_id
+
+    return _recommendation_to_outfit_list(plan_id, result)
 
 
 @app.get("/outfit/recommendations", response_model=OutfitPlanResponse)

@@ -20,6 +20,14 @@ recommendation_task:
     pros and cons, and estimated prices
   agent: recommendation_agent
 
+marketplace_task:
+  description: >
+    TODO: define marketplace task description for {shopping_request}
+    (placeholder — pairs with the stub marketplace_agent).
+  expected_output: >
+    TODO: define expected output.
+  agent: marketplace_agent
+
 visualize_task:
   description: >
     Transform the shopping plan and product recommendations into a polished

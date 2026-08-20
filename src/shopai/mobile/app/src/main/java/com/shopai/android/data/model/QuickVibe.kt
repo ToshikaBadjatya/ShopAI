@@ -15,7 +15,7 @@ sealed class QuickVibe(val label: String, val prompt: String) {
 
     object LateNightParty : QuickVibe(
         label = "Late Night Party",
-        prompt = "A bold late night party outfit with sleek fabrics, statement accessories, and a dramatic silhouette.Show me outfit recommendations and help me choose one."
+        prompt = "                  ."
     )
 
     object ScandiMinimal : QuickVibe(

@@ -52,6 +52,15 @@ class Shopai():
         )
 
     @agent
+    def marketplace_agent(self) -> Agent:
+        # Stub agent — no tools/prompt templates defined yet.
+        return Agent(
+            config=self.agents_config['marketplace_agent'],  # type: ignore[index]
+            tools=[],
+            verbose=True
+        )
+
+    @agent
     def visualize_agent(self) -> Agent:
         return Agent(
             config=self.agents_config['visualize_agent'],  # type: ignore[index]

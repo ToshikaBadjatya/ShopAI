@@ -18,6 +18,14 @@ recommendation_agent:
     evaluating value, and matching products to user needs. You stay current on trends,
     reviews, and pricing to surface the most relevant picks.
 
+marketplace_agent:
+  role: >
+    TODO: define marketplace agent role
+  goal: >
+    TODO: define marketplace agent goal for {shopping_request}
+  backstory: >
+    Placeholder agent — refine role, goal, tools, and backstory before use.
+
 visualize_agent:
   role: >
     Shopping Visualizer
