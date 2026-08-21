@@ -56,8 +56,7 @@ class UserProfile(BaseModel):
 
 
 class OutfitPlanRequest(BaseModel):
-    moodText: str
-    vibes: List[str] = []
+    prompt: str
 
 
 class OccasionalOutfitRequest(BaseModel):
@@ -230,7 +229,7 @@ async def update_profile(profile: UserProfile):
 async def plan_outfit(request: OutfitPlanRequest):
     global _current_outfit_id
 
-    inputs = _crew_inputs(request.moodText, request.vibes)
+    inputs = _crew_inputs(request.prompt, [])
     loop = asyncio.get_event_loop()
 
     try:

@@ -8,8 +8,7 @@ data class UserProfile(
 )
 
 data class OutfitPlanRequest(
-    val moodText: String,
-    val profile: UserProfile
+    val prompt: String
 )
 
 data class ProductData(

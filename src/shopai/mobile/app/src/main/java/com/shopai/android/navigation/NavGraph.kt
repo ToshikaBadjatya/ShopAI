@@ -1,5 +1,6 @@
 package com.shopai.android.navigation
 
+import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -13,10 +14,12 @@ import androidx.navigation.compose.rememberNavController
 import com.shopai.android.data.model.VisualizeData
 import com.shopai.android.data.repository.OutfitRepository
 import com.shopai.android.prefs.Session
+import com.shopai.android.screens.ChatScreen
 import com.shopai.android.screens.MoodScreen
 import com.shopai.android.screens.ProfileScreen
 import com.shopai.android.screens.RecommendationScreen
 import com.shopai.android.screens.VisualizeScreen
+import com.shopai.android.viewmodel.ChatViewModel
 import com.shopai.android.viewmodel.MoodViewModel
 import com.shopai.android.viewmodel.ProfileViewModel
 import com.shopai.android.viewmodel.RecommendationViewModel
@@ -27,6 +30,7 @@ sealed class Screen(val route: String) {
     object Profile : Screen("profile")
     object Recommendation : Screen("recommendation")
     object Visualize : Screen("visualize")
+    object Chat : Screen("chat")
 }
 
 @Composable
@@ -34,6 +38,11 @@ fun NavGraph(
     navController: NavHostController = rememberNavController(),
     startDestination: String = Screen.Mood.route
 ) {
+    // Activity-scoped so the screen that starts a request and the screen that shows
+    // it share one transcript.
+    val activity = LocalContext.current as ComponentActivity
+    val chatViewModel: ChatViewModel = viewModel(viewModelStoreOwner = activity)
+
     NavHost(navController = navController, startDestination = startDestination) {
         composable(Screen.Mood.route) {
             val viewModel: MoodViewModel = viewModel()
@@ -52,7 +61,14 @@ fun NavGraph(
 
             MoodScreen(
                 onBack = { navController.popBackStack() },
-                onPlanOutfit = { viewModel.planOutfit() },
+                onPlanOutfit = { occasional ->
+                    chatViewModel.planOutfit(
+                        moodText = moodText,
+                        vibes = selectedVibes.toList(),
+                        occasional = occasional
+                    )
+                    navController.navigate(Screen.Chat.route)
+                },
                 moodText = moodText,
                 onMoodTextChanged = { viewModel.updateMoodText(it) },
                 selectedVibes = selectedVibes,
@@ -115,6 +131,19 @@ fun NavGraph(
                 onGetLinks = { viewModel.getLinks() },
                 isLoadingLinks = isLoadingLinks,
                 links = links
+            )
+        }
+
+        composable(Screen.Chat.route) {
+            val chatItems by chatViewModel.items.collectAsState()
+            val selectedOptionIds by chatViewModel.selectedOptionIds.collectAsState()
+
+            ChatScreen(
+                items = chatItems,
+                selectedOptionIds = selectedOptionIds,
+                onOptionSelected = { _, optionId -> chatViewModel.selectOption(optionId) },
+                onBack = { navController.popBackStack() },
+                onSendMessage = { message -> chatViewModel.planOutfit(moodText = message) }
             )
         }
 

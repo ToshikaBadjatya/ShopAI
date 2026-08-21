@@ -20,6 +20,11 @@ interface ShopAIApiService {
     @POST("outfit/plan")
     suspend fun planOutfit(@Body request: OutfitPlanRequest): Response<List<OutfitPlanResponse>>
 
+    @POST("outfit/plan/occasional")
+    suspend fun planOccasionalOutfit(
+        @Body request: OutfitPlanRequest
+    ): Response<List<OutfitPlanResponse>>
+
     @GET("outfit/recommendations")
     suspend fun getRecommendations(): Response<OutfitPlanResponse>
 

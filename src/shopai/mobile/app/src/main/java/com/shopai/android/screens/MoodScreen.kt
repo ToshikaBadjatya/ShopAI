@@ -43,7 +43,7 @@ import com.shopai.android.ui.theme.TextSecondary
 @Composable
 fun MoodScreen(
     onBack: () -> Unit = {},
-    onPlanOutfit: () -> Unit = {},
+    onPlanOutfit: (occasional: Boolean) -> Unit = {},
     moodText: String = "",
     onMoodTextChanged: (String) -> Unit = {},
     selectedVibes: Set<String> = emptySet(),
@@ -56,8 +56,9 @@ fun MoodScreen(
     onViewWardrobe: () -> Unit = {},
     onViewStyleGuide: () -> Unit = {}
 ) {
-    val stylingTabs = listOf("Occasional Styling", "Everyday Styling")
+    val stylingTabs = listOf(OCCASIONAL_STYLING, "Everyday Styling")
     var selectedStylingTab by remember { mutableStateOf(stylingTabs.first()) }
+    val planOutfit = { onPlanOutfit(selectedStylingTab == OCCASIONAL_STYLING) }
 
     Scaffold(
         topBar = {
@@ -199,7 +200,7 @@ fun MoodScreen(
                                     tint = Color(0xFF6B6B80)
                                 )
                             }
-                            IconButton(onClick = onPlanOutfit) {
+                            IconButton(onClick = planOutfit) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.Send,
                                     contentDescription = "Send",
@@ -280,7 +281,7 @@ fun MoodScreen(
                             color = ShopAIRed
                         )
                     } else {
-                        PrimaryButton(text = "⚡ Plan My Outfit", onClick = onPlanOutfit)
+                        PrimaryButton(text = "⚡ Plan My Outfit", onClick = planOutfit)
 
                         Spacer(modifier = Modifier.height(12.dp))
 
@@ -461,3 +462,5 @@ private fun TrendCard(
         )
     }
 }
+
+private const val OCCASIONAL_STYLING = "Occasional Styling"
