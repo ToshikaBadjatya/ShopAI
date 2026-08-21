@@ -20,3 +20,11 @@ val ChipBorder = Color(0xFFDDDDE8)
 
 val CardBackground = Color(0xFFFFFFFF)
 val DividerColor = Color(0xFFEEEEF2)
+
+// Chat
+val UserBubble = Color(0xFFE4E8F3)
+val ChatInputBackground = Color(0xFFE4E8F3)
+val StepPending = Color(0xFFE8E9F0)
+val StepConnector = Color(0xFFEDEEF4)
+val ErrorSurfaceSoft = Color(0xFFFBE4E2)
+val QuickReplyBubble = Color(0xFFE4E8F3)
