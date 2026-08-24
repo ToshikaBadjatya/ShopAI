@@ -7,8 +7,7 @@ import com.shopai.android.data.model.ChatItem
 import com.shopai.android.data.model.ErrorKind
 import com.shopai.android.data.model.OutfitPlanRequest
 import com.shopai.android.data.model.OutfitPlanResponse
-import com.shopai.android.data.model.PlanStep
-import com.shopai.android.data.model.StepStatus
+import com.shopai.android.data.model.PlanResponse
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -56,6 +55,11 @@ class ChatViewModel : ViewModel() {
         }
     }
 
+    /** Drops the item carrying [id], if any. */
+    fun remove(id: String) {
+        _items.value = _items.value.filterNot { it.id == id }
+    }
+
     fun clear() {
         _items.value = emptyList()
         _selectedOptionIds.value = emptySet()
@@ -70,11 +74,36 @@ class ChatViewModel : ViewModel() {
         }
     }
 
+    // ----------------------------------------------------------------- thinking
+
+    /** Shows a muted line naming the work in flight, and returns its id. */
+    fun startThinking(text: String = "Thinking..."): String {
+        val id = newId()
+        append(ChatItem.Thinking(id = id, text = text))
+        return id
+    }
+
+    /** Swaps the line's text as the work moves on. */
+    fun updateThinking(id: String, text: String) {
+        replace(ChatItem.Thinking(id = id, text = text))
+    }
+
+    /** Puts [output] exactly where the thinking line was, dropping the line itself. */
+    fun finishThinking(id: String, output: ChatItem) {
+        _items.value = _items.value.map { item -> if (item.id == id) output else item }
+    }
+
+    /** Convenience for the common case: the thinking line becomes a reply from Sia. */
+    fun finishThinking(id: String, text: String) {
+        finishThinking(id, ChatItem.AssistantMessage(id = newId(), text = text))
+    }
+
     // ----------------------------------------------------------------- planning
 
     /**
-     * Posts [moodText] as the user's message and asks the backend for looks:
-     * `outfit/plan/occasional` when [occasional], otherwise `outfit/plan`.
+     * Posts the composed prompt as the user's message and asks the backend for looks:
+     * `outfit/plan/occasional` when [occasional], otherwise `outfit/plan`. Progress
+     * shows as a single thinking line, which the reply then takes the place of.
      */
     fun planOutfit(
         moodText: String,
@@ -92,12 +121,7 @@ class ChatViewModel : ViewModel() {
             )
         )
 
-        val planId = newId()
-        var steps = listOf(
-            PlanStep(STEP_UNDERSTANDING, StepStatus.IN_PROGRESS),
-
-        )
-        append(ChatItem.PlanBlock(id = planId, steps = steps))
+        val thinkingId = startThinking("Curating your looks...")
 
         viewModelScope.launch {
             _isPlanning.value = true
@@ -107,24 +131,18 @@ class ChatViewModel : ViewModel() {
                 val response = if (occasional) {
                     RetrofitClient.apiService.planOccasionalOutfit(request)
                 } else {
-                    RetrofitClient.apiService.planOutfit(request)
+                    RetrofitClient.apiService.planRegularOutfit(request)
                 }
 
-                if (response.isSuccessful) {
-                    steps = steps.markDone(STEP_CURATING).inProgress(STEP_FINISHING)
-                    replace(ChatItem.PlanBlock(id = planId, steps = steps))
-
-                    _planIdeas.value = response.body() ?: emptyList()
-
-                    steps = steps.markDone(STEP_FINISHING)
-                    replace(ChatItem.PlanBlock(id = planId, steps = steps))
+                val body = response.body()
+                if (response.isSuccessful && body != null) {
+                    handlePlanResponse(thinkingId, body)
                 } else {
-                    failPlanning(planId, steps, "Sia couldn't plan this one (${response.code()}).")
+                    failPlanning(thinkingId, "Sia couldn't plan this one (${response.code()}).")
                 }
             } catch (e: Exception) {
                 failPlanning(
-                    planId,
-                    steps,
+                    thinkingId,
                     e.message ?: "System is down and we'll be back shortly."
                 )
             } finally {
@@ -133,15 +151,62 @@ class ChatViewModel : ViewModel() {
         }
     }
 
-    private fun failPlanning(planId: String, steps: List<PlanStep>, message: String) {
-        replace(ChatItem.PlanBlock(id = planId, steps = steps.stall()))
+    /** Turns one envelope into whatever the transcript should show for it. */
+    private fun handlePlanResponse(thinkingId: String, body: PlanResponse) {
+        when (body.kind) {
+            KIND_PLAN -> {
+                _planIdeas.value = body.outfits
+                finishThinking(
+                    thinkingId,
+                    body.message.ifBlank { ideasReadyText(body.outfits.size) }
+                )
+            }
+
+            KIND_MESSAGE -> finishThinking(thinkingId, body.message)
+
+            KIND_PERMISSION -> {
+                remove(thinkingId)
+                append(ChatItem.Permission(id = newId(), text = body.message))
+            }
+
+            KIND_ERROR -> failPlanning(thinkingId, body.message, errorKind(body.errorKind))
+
+            // An unknown kind is a newer server talking to an older app: say the
+            // message rather than dropping the turn on the floor.
+            else -> finishThinking(
+                thinkingId,
+                body.message.ifBlank { "Sia sent something this version can't show yet." }
+            )
+        }
+    }
+
+    private fun errorKind(raw: String): ErrorKind = when (raw) {
+        "out_of_scope" -> ErrorKind.OUT_OF_SCOPE
+        "not_allowed" -> ErrorKind.NOT_ALLOWED
+        "clarification" -> ErrorKind.CLARIFICATION
+        else -> ErrorKind.SYSTEM_DOWN
+    }
+
+    /** Drops the thinking line - the work stopped, it did not finish - and says why. */
+    private fun failPlanning(
+        thinkingId: String,
+        message: String,
+        kind: ErrorKind = ErrorKind.SYSTEM_DOWN
+    ) {
+        remove(thinkingId)
         append(
             ChatItem.Error(
                 id = newId(),
-                text = message,
-                kind = ErrorKind.SYSTEM_DOWN
+                text = message.ifBlank { "Something went wrong on Sia's side." },
+                kind = kind
             )
         )
+    }
+
+    private fun ideasReadyText(count: Int): String = when (count) {
+        0 -> "I couldn't pull a look together for that. Tell me a bit more?"
+        1 -> "I've curated a look for you."
+        else -> "I've curated $count looks for you."
     }
 
     private fun composePrompt(moodText: String, vibes: List<String>): String {
@@ -155,22 +220,10 @@ class ChatViewModel : ViewModel() {
 
     private fun newId(): String = UUID.randomUUID().toString()
 
-    private fun List<PlanStep>.markDone(label: String) = map { step ->
-        if (step.label == label) step.copy(status = StepStatus.DONE) else step
-    }
-
-    private fun List<PlanStep>.inProgress(label: String) = map { step ->
-        if (step.label == label) step.copy(status = StepStatus.IN_PROGRESS) else step
-    }
-
-    /** Drops any running step back to pending - the work stopped, it did not finish. */
-    private fun List<PlanStep>.stall() = map { step ->
-        if (step.status == StepStatus.IN_PROGRESS) step.copy(status = StepStatus.TODO) else step
-    }
-
     private companion object {
-        const val STEP_UNDERSTANDING = "Understanding your mood"
-        const val STEP_CURATING = "Curating your looks"
-        const val STEP_FINISHING = "Finishing touches"
+        const val KIND_PLAN = "plan"
+        const val KIND_MESSAGE = "message"
+        const val KIND_PERMISSION = "permission"
+        const val KIND_ERROR = "error"
     }
 }

@@ -43,6 +43,15 @@ sealed interface ChatItem {
         val text: String
     ) : ChatItem
 
+    /**
+     * A single grey line naming what Sia is doing right now. Transient - it is
+     * replaced by whatever it produces.
+     */
+    data class Thinking(
+        override val id: String,
+        val text: String = "Thinking..."
+    ) : ChatItem
+
     data class PlanBlock(
         override val id: String,
         val header: String = "Sia is thinking...",

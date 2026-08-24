@@ -8,7 +8,9 @@ data class UserProfile(
 )
 
 data class OutfitPlanRequest(
-    val prompt: String
+    val prompt: String,
+    /** Identifies the shopper to the backend; nothing verifies it yet. */
+    val userToken: String? = null
 )
 
 data class ProductData(
@@ -26,6 +28,17 @@ data class OutfitPlanResponse(
     val tags: List<String> = emptyList(),
     val heroImageUrl: String = "",
     val products: List<ProductData> = emptyList()
+)
+
+/**
+ * One shape for every plan outcome. [kind] says what the body holds:
+ * `plan` (outfits populated), `message`, `permission`, or `error`.
+ */
+data class PlanResponse(
+    val kind: String = "plan",
+    val message: String = "",
+    val outfits: List<OutfitPlanResponse> = emptyList(),
+    val errorKind: String = "system_down"
 )
 
 data class VisualizeData(

@@ -3,6 +3,7 @@ package com.shopai.android.data.api
 import com.shopai.android.data.model.GetLinksRequest
 import com.shopai.android.data.model.OutfitPlanRequest
 import com.shopai.android.data.model.OutfitPlanResponse
+import com.shopai.android.data.model.PlanResponse
 import com.shopai.android.data.model.ProductLink
 import com.shopai.android.data.model.UserProfile
 import com.shopai.android.data.model.VisualizeData
@@ -17,13 +18,11 @@ interface ShopAIApiService {
     @POST("profile/update")
     suspend fun updateProfile(@Body profile: UserProfile): Response<Unit>
 
-    @POST("outfit/plan")
-    suspend fun planOutfit(@Body request: OutfitPlanRequest): Response<List<OutfitPlanResponse>>
+    @POST("outfit/plan/regular")
+    suspend fun planRegularOutfit(@Body request: OutfitPlanRequest): Response<PlanResponse>
 
     @POST("outfit/plan/occasional")
-    suspend fun planOccasionalOutfit(
-        @Body request: OutfitPlanRequest
-    ): Response<List<OutfitPlanResponse>>
+    suspend fun planOccasionalOutfit(@Body request: OutfitPlanRequest): Response<PlanResponse>
 
     @GET("outfit/recommendations")
     suspend fun getRecommendations(): Response<OutfitPlanResponse>

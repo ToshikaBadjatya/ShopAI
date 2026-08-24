@@ -5,6 +5,7 @@ from crewai import Agent, Crew, Process, Task
 from crewai.project import CrewBase, agent, crew, task
 from crewai.agents.agent_builder.base_agent import BaseAgent
 
+from shopai.llm import default_llm
 from shopai.prompts import (
     PLANNING_PROMPT_TEMPLATE,
     PLANNING_SYSTEM_TEMPLATE,
@@ -32,6 +33,7 @@ class Shopai():
     @agent
     def planning_agent(self) -> Agent:
         return Agent(
+            llm=default_llm(),
             config=self.agents_config['planning_agent'],  # type: ignore[index]
             tools=[WeatherByLocationTool()],
             system_template=PLANNING_SYSTEM_TEMPLATE,
@@ -43,6 +45,7 @@ class Shopai():
     @agent
     def recommendation_agent(self) -> Agent:
         return Agent(
+            llm=default_llm(),
             config=self.agents_config['recommendation_agent'],  # type: ignore[index]
             tools=[OutfitScraperTool()],
             system_template=RECOMMENDATION_SYSTEM_TEMPLATE,
@@ -55,6 +58,7 @@ class Shopai():
     def marketplace_agent(self) -> Agent:
         # Stub agent — no tools/prompt templates defined yet.
         return Agent(
+            llm=default_llm(),
             config=self.agents_config['marketplace_agent'],  # type: ignore[index]
             tools=[],
             verbose=True
@@ -63,6 +67,7 @@ class Shopai():
     @agent
     def visualize_agent(self) -> Agent:
         return Agent(
+            llm=default_llm(),
             config=self.agents_config['visualize_agent'],  # type: ignore[index]
             tools=[OutfitVisualizationTool()],
             system_template=VISUALIZE_SYSTEM_TEMPLATE,

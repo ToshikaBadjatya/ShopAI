@@ -48,6 +48,7 @@ import com.shopai.android.reusables.chat.ErrorItem
 import com.shopai.android.reusables.chat.OptionsItem
 import com.shopai.android.reusables.chat.PermissionItem
 import com.shopai.android.reusables.chat.PlanningItem
+import com.shopai.android.reusables.chat.ThinkingItem
 import com.shopai.android.reusables.chat.UserMessageItem
 import com.shopai.android.ui.theme.Background
 import com.shopai.android.ui.theme.ChatInputBackground
@@ -120,6 +121,8 @@ fun ChatScreen(
                         onDeny = { onPermissionDeny(item.id) },
                         onViewDetails = { onPermissionDetails(item.id) }
                     )
+
+                    is ChatItem.Thinking -> ThinkingItem(text = item.text)
 
                     is ChatItem.PlanBlock -> PlanningItem(
                         header = item.header,
@@ -219,6 +222,7 @@ internal val sampleChatItems: List<ChatItem> = listOf(
         id = "m2",
         text = "On it, bestie! I'm curating a high-drama party look for you right now."
     ),
+    ChatItem.Thinking(id = "m2b", text = "Reading your style profile..."),
     ChatItem.PlanBlock(
         id = "m3",
         header = "Sia is thinking...",
