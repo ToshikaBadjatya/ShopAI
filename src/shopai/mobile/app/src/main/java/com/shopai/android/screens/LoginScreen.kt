@@ -32,6 +32,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -59,11 +60,13 @@ fun LoginScreen(
     submitting: Boolean = false,
     error: String? = null,
     notice: String? = null,
+    needsConfirmation: Boolean = false,
     onModeChange: (AuthMode) -> Unit = {},
     onEmailChange: (String) -> Unit = {},
     onPasswordChange: (String) -> Unit = {},
     onConfirmPasswordChange: (String) -> Unit = {},
-    onSubmit: () -> Unit = {}
+    onSubmit: () -> Unit = {},
+    onResendConfirmation: () -> Unit = {}
 ) {
     val isSignUp = mode == AuthMode.SIGN_UP
 
@@ -148,6 +151,18 @@ fun LoginScreen(
                 if (error != null) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(text = error, color = ShopAIRed, fontSize = 14.sp, lineHeight = 20.sp)
+                }
+
+                if (needsConfirmation) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Resend confirmation email",
+                        color = ShopAIRed,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        textDecoration = TextDecoration.Underline,
+                        modifier = Modifier.clickable(onClick = onResendConfirmation)
+                    )
                 }
 
                 if (notice != null) {
@@ -252,6 +267,21 @@ private fun LoginScreenSignUpPreview() {
             password = "secret",
             confirmPassword = "secre",
             error = "Passwords don't match."
+        )
+    }
+}
+
+@Preview(showBackground = true, heightDp = 800)
+@Composable
+private fun LoginScreenUnconfirmedPreview() {
+    ShopAITheme {
+        LoginScreen(
+            mode = AuthMode.SIGN_IN,
+            email = "you@example.com",
+            password = "secret",
+            confirmPassword = "",
+            error = "This email hasn't been confirmed yet. Check your inbox for the link, or resend it.",
+            needsConfirmation = true
         )
     }
 }

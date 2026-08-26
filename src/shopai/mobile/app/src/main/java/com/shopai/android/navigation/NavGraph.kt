@@ -62,6 +62,7 @@ fun NavGraph(
             val submitting by authViewModel.submitting.collectAsState()
             val error by authViewModel.error.collectAsState()
             val notice by authViewModel.notice.collectAsState()
+            val needsConfirmation by authViewModel.needsConfirmation.collectAsState()
             val loggedIn by authViewModel.loggedIn.collectAsState()
 
             LaunchedEffect(loggedIn) {
@@ -80,11 +81,13 @@ fun NavGraph(
                 submitting = submitting,
                 error = error,
                 notice = notice,
+                needsConfirmation = needsConfirmation,
                 onModeChange = { authViewModel.setMode(it) },
                 onEmailChange = { authViewModel.updateEmail(it) },
                 onPasswordChange = { authViewModel.updatePassword(it) },
                 onConfirmPasswordChange = { authViewModel.updateConfirmPassword(it) },
-                onSubmit = { authViewModel.submit() }
+                onSubmit = { authViewModel.submit() },
+                onResendConfirmation = { authViewModel.resendConfirmation() }
             )
         }
 

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.shopai.android.data.api.SupabaseAuth
 import com.shopai.android.data.model.AuthSession
 import com.shopai.android.prefs.Session
+import io.github.jan.supabase.gotrue.OtpType
 import io.github.jan.supabase.gotrue.providers.builtin.Email
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,6 +39,10 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
+    /** True while the signed-in-with address is known to be unconfirmed. */
+    private val _needsConfirmation = MutableStateFlow(false)
+    val needsConfirmation: StateFlow<Boolean> = _needsConfirmation.asStateFlow()
+
     /** Set when sign-up succeeded but the account still needs email confirmation. */
     private val _notice = MutableStateFlow<String?>(null)
     val notice: StateFlow<String?> = _notice.asStateFlow()
@@ -49,6 +54,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         _mode.value = mode
         _error.value = null
         _notice.value = null
+        _needsConfirmation.value = false
     }
 
     fun updateEmail(value: String) {
@@ -69,11 +75,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun signIn() {
-        val problem = validate(checkConfirmation = false)
-        if (problem != null) {
-            _error.value = problem
-            return
-        }
+
 
         _error.value = null
         _notice.value = null
@@ -94,11 +96,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun signUp() {
-        val problem = validate(checkConfirmation = true)
-        if (problem != null) {
-            _error.value = problem
-            return
-        }
+       
 
         _error.value = null
         _notice.value = null
@@ -120,6 +118,27 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 } else {
                     persistSession()
                 }
+            } catch (e: Exception) {
+                _error.value = readableError(e)
+            } finally {
+                _submitting.value = false
+            }
+        }
+    }
+
+    /**
+     * Sends the confirmation link again. Only reachable once a sign-in has come
+     * back unconfirmed, so there is an address worth resending to.
+     */
+    fun resendConfirmation() {
+        if (_submitting.value || _email.value.isBlank()) return
+        _error.value = null
+        _submitting.value = true
+        viewModelScope.launch {
+            try {
+                SupabaseAuth.auth.resendEmail(OtpType.Email.SIGNUP, _email.value)
+                _notice.value = "Confirmation link sent to ${_email.value}."
+                _needsConfirmation.value = false
             } catch (e: Exception) {
                 _error.value = readableError(e)
             } finally {
@@ -171,6 +190,19 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         else -> null
     }
 
-    private fun readableError(e: Exception): String =
-        e.message?.takeIf { it.isNotBlank() } ?: "Something went wrong. Try again."
+    /** GoTrue reports an unconfirmed account as `email_not_confirmed`. */
+    private fun isUnconfirmed(e: Exception): Boolean =
+        e.message?.contains("not_confirmed", ignoreCase = true) == true ||
+            e.message?.contains("not confirmed", ignoreCase = true) == true
+
+    private fun readableError(e: Exception): String = when {
+        isUnconfirmed(e) ->
+            "This email hasn't been confirmed yet. Check your inbox for the link, or resend it."
+        e.message?.contains("invalid_credentials", ignoreCase = true) == true ||
+            e.message?.contains("Invalid login", ignoreCase = true) == true ->
+            "Wrong email or password."
+        e.message?.contains("already registered", ignoreCase = true) == true ->
+            "That email is already registered - sign in instead."
+        else -> e.message?.takeIf { it.isNotBlank() } ?: "Something went wrong. Try again."
+    }
 }
