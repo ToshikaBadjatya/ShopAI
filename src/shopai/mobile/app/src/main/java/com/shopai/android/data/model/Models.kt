@@ -40,29 +40,3 @@ data class PlanResponse(
     val outfits: List<OutfitPlanResponse> = emptyList(),
     val errorKind: String = "system_down"
 )
-
-data class VisualizeData(
-    val outfitId: String = "",
-    val visualUrl: String = "",
-    val outfitName: String = "",
-    val items: List<ProductData> = emptyList(),
-    val colorPalette: List<String> = emptyList()
-)
-
-data class ProductLink(
-    val name: String = "",
-    val url: String = "",
-    val price: String = "",
-    val platform: String = ""
-)
-
-data class GetLinksRequest(
-    val outfitId: String,
-    val selectedItems: List<String>
-)
-
-data class VisualizeRequest(
-    val outfitDescription: String,
-    val bodyType: String,
-    val height: String
-)

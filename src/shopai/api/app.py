@@ -328,7 +328,7 @@ async def plan_occasional(request: PlanRequest) -> PlanResponse:
 #         "shopping_request": mood_text,
 #         "location": "India",
 #         "budget": "5000 INR",
-#         "gender": "female",
+#         "gender": "female",   
 #         "height": profile.get("height", "5'6\""),
 #         "body_type": profile.get("bodyType", "average"),
 #         "style": style,

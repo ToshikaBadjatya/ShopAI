@@ -12,27 +12,19 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.shopai.android.data.model.VisualizeData
-import com.shopai.android.data.repository.OutfitRepository
 import com.shopai.android.prefs.Session
 import com.shopai.android.screens.ChatScreen
 import com.shopai.android.screens.LoginScreen
 import com.shopai.android.screens.MoodScreen
 import com.shopai.android.screens.ProfileScreen
-import com.shopai.android.screens.RecommendationScreen
-import com.shopai.android.screens.VisualizeScreen
 import com.shopai.android.viewmodel.AuthViewModel
 import com.shopai.android.viewmodel.ChatViewModel
 import com.shopai.android.viewmodel.MoodViewModel
 import com.shopai.android.viewmodel.ProfileViewModel
-import com.shopai.android.viewmodel.RecommendationViewModel
-import com.shopai.android.viewmodel.VisualizeViewModel
 
 sealed class Screen(val route: String) {
     object Mood : Screen("mood")
     object Profile : Screen("profile")
-    object Recommendation : Screen("recommendation")
-    object Visualize : Screen("visualize")
     object Chat : Screen("chat")
     object Login : Screen("login")
 }
@@ -96,16 +88,6 @@ fun NavGraph(
             val moodText by viewModel.moodText.collectAsState()
             val selectedVibes by viewModel.selectedVibes.collectAsState()
             val isLoading by viewModel.isLoading.collectAsState()
-            val planIdeas by viewModel.planIdeas.collectAsState()
-            val selectedOutfit by viewModel.selectedOutfit.collectAsState()
-
-            LaunchedEffect(selectedOutfit) {
-                if (selectedOutfit != null) {
-                    navController.navigate(Screen.Recommendation.route)
-                    viewModel.clearSelectedOutfit()
-                }
-            }
-
             MoodScreen(
                 onBack = { navController.popBackStack() },
                 onPlanOutfit = { occasional ->
@@ -122,9 +104,7 @@ fun NavGraph(
                 quickVibes = viewModel.quickVibes,
                 onQuickVibeSelected = { viewModel.selectQuickVibe(it) },
                 goToProfile = { navController.navigate(Screen.Profile.route) },
-                isLoading = isLoading,
-                planIdeas = planIdeas,
-                onOutfitSelected = { viewModel.selectOutfit(it) }
+                isLoading = isLoading
             )
         }
 
@@ -151,36 +131,6 @@ fun NavGraph(
             )
         }
 
-        composable(Screen.Recommendation.route) {
-            val viewModel: RecommendationViewModel = viewModel()
-            val recommendation by viewModel.recommendation.collectAsState()
-            val isFavorite by viewModel.isFavorite.collectAsState()
-            val selectedItems by viewModel.selectedItems.collectAsState()
-            val links by viewModel.links.collectAsState()
-            val isLoadingLinks by viewModel.isLoadingLinks.collectAsState()
-
-            RecommendationScreen(
-                onBack = {
-                    navController.navigate(Screen.Mood.route) {
-                        popUpTo(Screen.Mood.route) { inclusive = true }
-                    }
-                },
-                onRegenerate = { viewModel.regenerate() },
-                onVisualize = { outfitDescription ->
-                    OutfitRepository.pendingVisualizeDescription = outfitDescription
-                    navController.navigate(Screen.Visualize.route)
-                },
-                isFavorite = isFavorite,
-                onFavoriteToggled = { viewModel.toggleFavorite() },
-                outfitPlan = recommendation,
-                selectedItems = selectedItems,
-                onItemToggled = { viewModel.toggleItem(it) },
-                onGetLinks = { viewModel.getLinks() },
-                isLoadingLinks = isLoadingLinks,
-                links = links
-            )
-        }
-
         composable(Screen.Chat.route) {
             val chatItems by chatViewModel.items.collectAsState()
             val selectedOptionIds by chatViewModel.selectedOptionIds.collectAsState()
@@ -194,26 +144,5 @@ fun NavGraph(
             )
         }
 
-        composable(route = Screen.Visualize.route) {
-            val context = LocalContext.current
-            val profile = Session.getProfile(context)
-            val viewModel: VisualizeViewModel = viewModel()
-            val visualizeData by viewModel.visualizeData.collectAsState()
-            val description = OutfitRepository.pendingVisualizeDescription
-
-            LaunchedEffect(description) {
-                viewModel.loadVisualize(
-                    outfitDescription = description,
-                    bodyType = profile.bodyType,
-                    height = profile.height
-                )
-            }
-
-            VisualizeScreen(
-                onBack = { navController.popBackStack() },
-                outfitName = visualizeData?.outfitName ?: "",
-                visualizeData = visualizeData ?: VisualizeData()
-            )
-        }
     }
 }
