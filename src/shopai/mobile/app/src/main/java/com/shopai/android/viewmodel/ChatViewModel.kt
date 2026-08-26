@@ -1,6 +1,7 @@
 package com.shopai.android.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.shopai.android.data.api.RetrofitClient
 import com.shopai.android.data.model.ChatItem
@@ -8,6 +9,7 @@ import com.shopai.android.data.model.ErrorKind
 import com.shopai.android.data.model.OutfitPlanRequest
 import com.shopai.android.data.model.OutfitPlanResponse
 import com.shopai.android.data.model.PlanResponse
+import com.shopai.android.prefs.Session
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,7 +20,7 @@ import java.util.UUID
  * Owns the conversation with Sia. Held at activity scope so the screen that starts a
  * request and the screen that shows it are talking to the same transcript.
  */
-class ChatViewModel : ViewModel() {
+class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _items = MutableStateFlow<List<ChatItem>>(emptyList())
     val items: StateFlow<List<ChatItem>> = _items.asStateFlow()
@@ -114,12 +116,12 @@ class ChatViewModel : ViewModel() {
         if (prompt.isBlank() || _isPlanning.value) return
 
         append(ChatItem.UserMessage(id = newId(), text = prompt))
-        append(
-            ChatItem.AssistantMessage(
-                id = newId(),
-                text = "On it, bestie! I'm curating a look for you right now."
-            )
-        )
+//        append(
+//            ChatItem.AssistantMessage(
+//                id = newId(),
+//                text = "On it, bestie! I'm curating a look for you right now."
+//            )
+//        )
 
         val thinkingId = startThinking("Curating your looks...")
 
@@ -127,7 +129,10 @@ class ChatViewModel : ViewModel() {
             _isPlanning.value = true
             _planIdeas.value = emptyList()
             try {
-                val request = OutfitPlanRequest(prompt = prompt)
+                val request = OutfitPlanRequest(
+                    prompt = prompt,
+                    userToken = Session.getAuth(getApplication()).accessToken.ifBlank { null }
+                )
                 val response = if (occasional) {
                     RetrofitClient.apiService.planOccasionalOutfit(request)
                 } else {

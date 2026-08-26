@@ -1,11 +1,12 @@
 """ShopAI FastAPI server.
 
 Two endpoints, both taking a prompt and an optional user token:
-  POST /outfit/plan/regular
-  POST /outfit/plan/occasional
+  POST /outfit/plan/regular      guardrail -> planning crew
+  POST /outfit/plan/occasional   guardrail -> Recommendation Master crew
 
-Both answer with the same envelope: `kind` says what happened, and the client
-decides how to draw it. Everything else is kept below, commented out.
+Every request is validated first. Only an in_scope verdict reaches an agent;
+anything else comes straight back as an error envelope the chat can render.
+The previous API surface lives in dummy_app.py, which nothing serves.
 """
 
 from __future__ import annotations
@@ -34,7 +35,7 @@ _OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "output")
 os.makedirs(_OUTPUT_DIR, exist_ok=True)
 app.mount("/static", StaticFiles(directory=_OUTPUT_DIR), name="static")
 
-# outfitId -> {planning|recommendation, inputs, userToken}
+# planId -> {planning|recommendation, inputs, userToken, validation}
 _plan_store: dict[str, dict] = {}
 
 
@@ -70,7 +71,7 @@ class PlanResponse(BaseModel):
     `kind` tells the client what it is holding:
       plan       - `outfits` is populated
       message    - plain reply from Sia, `message` only
-      permission - Sia needs access before continuing, `message` explains what
+      permission - Sia needs access before continuing
       error      - `message` says what went wrong, `errorKind` how to show it
     """
 
@@ -105,13 +106,33 @@ def _crew_inputs(prompt: str) -> dict:
     }
 
 
+def _as_tags(items) -> List[str]:
+    """The planning agent returns items as plain strings or as dicts - take both."""
+    tags: List[str] = []
+    for item in items or []:
+        if isinstance(item, str):
+            tags.append(item)
+        elif isinstance(item, dict):
+            label = (
+                item.get("piece")
+                or item.get("item")
+                or item.get("name")
+                or next((v for v in item.values() if isinstance(v, str)), "")
+            )
+            if label:
+                tags.append(label)
+        else:
+            tags.append(str(item))
+    return tags
+
+
 def _planning_to_outfits(plan_id: str, planning: dict) -> List[OutfitPlanResponse]:
     return [
         OutfitPlanResponse(
             outfitId=f"{plan_id}:{i}",
             outfitName=outfit.get("outfit_name", ""),
             description=outfit.get("rationale", ""),
-            tags=outfit.get("items", []),
+            tags=_as_tags(outfit.get("items")),
         )
         for i, outfit in enumerate(planning.get("outfits", [])[:5])
     ]
@@ -128,6 +149,7 @@ def _recommendation_to_outfits(plan_id: str, recommendation: dict) -> List[Outfi
                 platform=_platform_from_url(p.get("product_url") or ""),
             )
             for j, p in enumerate(entry.get("products", []))
+            if isinstance(p, dict)
         ]
         outfits.append(
             OutfitPlanResponse(
@@ -139,14 +161,14 @@ def _recommendation_to_outfits(plan_id: str, recommendation: dict) -> List[Outfi
     return outfits
 
 
-def _plan_result(outfits: List[OutfitPlanResponse]) -> PlanResponse:
+def _plan_result(outfits: List[OutfitPlanResponse], summary: str = "") -> PlanResponse:
     """A plan with nothing in it is a message, not a plan - say so plainly."""
-    if not outfits:
-        return PlanResponse(
-            kind="message",
-            message="I couldn't pull a look together for that. Tell me a bit more?",
-        )
-    return PlanResponse(kind="plan", outfits=outfits)
+    if outfits:
+        return PlanResponse(kind="plan", outfits=outfits)
+    return PlanResponse(
+        kind="message",
+        message=summary or "I couldn't pull a look together for that. Tell me a bit more?",
+    )
 
 
 def _failure(message: str, error_kind: str = "system_down") -> PlanResponse:
@@ -154,408 +176,80 @@ def _failure(message: str, error_kind: str = "system_down") -> PlanResponse:
     return PlanResponse(kind="error", message=message, errorKind=error_kind)
 
 
+# How a rejection is drawn in the chat.
+_REJECTION_KIND = {
+    "out_of_scope": "out_of_scope",
+    "not_allowed": "not_allowed",
+    "needs_clarification": "clarification",
+}
+
+
+async def _guard(prompt: str) -> tuple[dict, Optional[PlanResponse]]:
+    """Run the guardrail before anything else.
+
+    Returns (verdict, rejection). `rejection` is None when the request passed
+    and should go to the master agent; otherwise it is the envelope to return
+    as-is. A guardrail that itself fails counts as a rejection - failing open
+    would defeat the point of having one.
+    """
+    loop = asyncio.get_event_loop()
+    try:
+        verdict = await loop.run_in_executor(None, Shopai().run_validation, prompt)
+    except Exception as exc:
+        return {}, _failure(f"Could not check that request: {exc}")
+
+    if verdict.get("allowed"):
+        return verdict, None
+
+    rejection = verdict.get("rejection", "needs_clarification")
+    # The fixed line from the guardrail, never the diagnostic reason.
+    message = verdict.get("message") or "I can't help with that one."
+    return verdict, _failure(message, error_kind=_REJECTION_KIND.get(rejection, "system_down"))
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
-@app.post("/outfit/plan/regular", response_model=PlanResponse)
-async def plan_regular(request: PlanRequest) -> PlanResponse:
-    inputs = _crew_inputs(request.prompt)
+async def _plan(request: PlanRequest) -> PlanResponse:
+    """Guardrail, then hand the request to the Recommendation Master agent.
+
+    Both routes share this: the API no longer decides what a request is, so
+    there is nothing left to differentiate them here. The master reads the
+    request and picks the specialists.
+    """
+    verdict, rejection = await _guard(request.prompt)
+    if rejection is not None:
+        return rejection
+
     loop = asyncio.get_event_loop()
-
-    try:
-        planning = await loop.run_in_executor(None, Shopai().run_planning, inputs)
-    except Exception as exc:
-        return _failure(f"Planning agent failed: {exc}")
-
-    plan_id = str(uuid.uuid4())
-    _plan_store[plan_id] = {
-        "planning": planning,
-        "inputs": inputs,
-        "userToken": request.userToken,
-    }
-    return _plan_result(_planning_to_outfits(plan_id, planning))
-
-
-@app.post("/outfit/plan/occasional", response_model=PlanResponse)
-async def plan_occasional(request: PlanRequest) -> PlanResponse:
-    loop = asyncio.get_event_loop()
-
     try:
         result = await loop.run_in_executor(
-            None, lambda: Shopai().plan_occasional_outfit(request.prompt, {})
+            None, lambda: Shopai().run_master_recommendation(request.prompt, {})
         )
-    except ValueError as exc:
-        return _failure(str(exc), error_kind="out_of_scope")
     except Exception as exc:
-        return _failure(f"Occasional outfit planning failed: {exc}")
+        return _failure(f"Recommendation master failed: {exc}")
 
     plan_id = str(uuid.uuid4())
     _plan_store[plan_id] = {
         "recommendation": result,
         "inputs": {"shopping_request": request.prompt},
         "userToken": request.userToken,
+        "validation": verdict,
     }
-    return _plan_result(_recommendation_to_outfits(plan_id, result))
+    return _plan_result(
+        _recommendation_to_outfits(plan_id, result),
+        summary=result.get("summary", ""),
+    )
 
 
-# ===========================================================================
-# Everything below is the previous surface, kept for reference.
-# ===========================================================================
+@app.post("/outfit/plan/regular", response_model=PlanResponse)
+async def plan_regular(request: PlanRequest) -> PlanResponse:
+    """Guardrail, then the Recommendation Master crew."""
+    return await _plan(request)
 
-# """ShopAI FastAPI server — Human-in-the-Loop pipeline.
 
-# Endpoints match the Android ShopAIApiService exactly:
-#   POST /profile/update
-#   POST /outfit/plan
-#   POST /outfit/plan/occasional
-#   GET  /outfit/recommendations
-#   POST /outfit/visualize
-# """
-
-# from __future__ import annotations
-
-# import asyncio
-# import os
-# import re
-# import uuid
-# import warnings
-# from typing import List, Optional
-
-# warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
-
-# from fastapi import FastAPI, HTTPException
-# from fastapi.staticfiles import StaticFiles
-# from pydantic import BaseModel
-
-# from shopai.crew import Shopai
-# from shopai.telemetry import setup_telemetry
-
-# setup_telemetry()
-
-# app = FastAPI(title="ShopAI", version="0.1.0")
-
-# # Serve generated images at /static/<filename>
-# _OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "output")
-# os.makedirs(_OUTPUT_DIR, exist_ok=True)
-# app.mount("/static", StaticFiles(directory=_OUTPUT_DIR), name="static")
-
-# # ---------------------------------------------------------------------------
-# # Minimal in-memory state — bridges the three sequential calls.
-# # No sessions; just stores the latest profile and per-outfitId crew outputs.
-# # ---------------------------------------------------------------------------
-# _profile: dict = {}
-# _outfit_store: dict[str, dict] = {}   # outfitId → {planning, recommendation}
-# _current_outfit_id: Optional[str] = None
-
-
-# # ---------------------------------------------------------------------------
-# # Request / response models — mirror Android data classes exactly
-# # ---------------------------------------------------------------------------
-
-# class UserProfile(BaseModel):
-#     height: str = ""
-#     bodyType: str = ""
-#     favoriteColors: List[str] = []
-#     styles: List[str] = []
-
-
-# class OutfitPlanRequest(BaseModel):
-#     prompt: str
-
-
-# class OccasionalOutfitRequest(BaseModel):
-#     prompt: str
-
-
-# class ProductData(BaseModel):
-#     id: str = ""
-#     imageUrl: str = ""
-#     name: str = ""
-#     price: str = ""
-#     platform: str = ""
-
-
-# class OutfitPlanResponse(BaseModel):
-#     outfitId: str = ""
-#     outfitName: str = ""
-#     description: str = ""
-#     tags: List[str] = []
-#     heroImageUrl: str = ""
-#     products: List[ProductData] = []
-
-
-# class VisualizeData(BaseModel):
-#     outfitId: str = ""
-#     visualUrl: str = ""
-#     outfitName: str = ""
-#     items: List[ProductData] = []
-#     colorPalette: List[str] = []
-
-
-# class GetLinksRequest(BaseModel):
-#     outfitId: str = ""
-#     selectedItems: List[str] = []
-
-
-# class ProductLink(BaseModel):
-#     name: str = ""
-#     url: str = ""
-#     price: str = ""
-#     platform: str = ""
-
-
-# # ---------------------------------------------------------------------------
-# # Helpers
-# # ---------------------------------------------------------------------------
-
-# def _platform_from_url(url: str) -> str:
-#     if "amazon" in url:
-#         return "Amazon"
-#     if "flipkart" in url:
-#         return "Flipkart"
-#     if "myntra" in url:
-#         return "Myntra"
-#     if "meesho" in url:
-#         return "Meesho"
-#     return ""
-
-
-# def _crew_inputs(mood_text: str, vibes: List[str]) -> dict:
-#     profile = _profile
-#     style = ", ".join(profile.get("styles", []) + vibes) or "casual"
-#     return {
-#         "shopping_request": mood_text,
-#         "location": "India",
-#         "budget": "5000 INR",
-#         "gender": "female",   
-#         "height": profile.get("height", "5'6\""),
-#         "body_type": profile.get("bodyType", "average"),
-#         "style": style,
-#     }
-
-
-# def _planning_to_outfit_list(plan_id: str, planning: dict, products: List[ProductData] = None) -> List[OutfitPlanResponse]:
-#     outfits = planning.get("outfits", [])[:5]
-#     return [
-#         OutfitPlanResponse(
-#             outfitId=f"{plan_id}:{i}",
-#             outfitName=outfit.get("outfit_name", ""),
-#             description=outfit.get("rationale", ""),
-#             tags=outfit.get("items", []),
-#             heroImageUrl="",
-#             products=products or [],
-#         )
-#         for i, outfit in enumerate(outfits)
-#     ]
-
-
-# def _planning_to_response(plan_id: str, planning: dict, outfit_idx: int = 0, products: List[ProductData] = None) -> OutfitPlanResponse:
-#     outfits = planning.get("outfits", [])
-#     outfit = outfits[outfit_idx] if outfit_idx < len(outfits) else {}
-#     return OutfitPlanResponse(
-#         outfitId=f"{plan_id}:{outfit_idx}",
-#         outfitName=outfit.get("outfit_name", ""),
-#         description=outfit.get("rationale", ""),
-#         tags=outfit.get("items", []),
-#         heroImageUrl="",
-#         products=products or [],
-#     )
-
-
-# def _recommendation_products(recommendation: dict) -> List[ProductData]:
-#     recs = recommendation.get("recommendations", [])
-#     products: List[ProductData] = []
-#     for i, entry in enumerate(recs):
-#         for p in entry.get("products", []):
-#             url = p.get("product_url") or ""
-#             products.append(ProductData(
-#                 id=str(i),
-#                 imageUrl="",
-#                 name=p.get("product_name") or "",
-#                 price=p.get("product_price") or "",
-#                 platform=_platform_from_url(url),
-#             ))
-#     return products
-
-
-# def _recommendation_to_outfit_list(plan_id: str, recommendation: dict) -> List[OutfitPlanResponse]:
-#     recs = recommendation.get("recommendations", [])[:5]
-#     outfits: List[OutfitPlanResponse] = []
-#     for i, entry in enumerate(recs):
-#         products = [
-#             ProductData(
-#                 id=str(j),
-#                 imageUrl="",
-#                 name=p.get("product_name") or "",
-#                 price=p.get("product_price") or "",
-#                 platform=_platform_from_url(p.get("product_url") or ""),
-#             )
-#             for j, p in enumerate(entry.get("products", []))
-#         ]
-#         outfits.append(OutfitPlanResponse(
-#             outfitId=f"{plan_id}:{i}",
-#             outfitName=entry.get("outfit_name", ""),
-#             description="",
-#             tags=[],
-#             heroImageUrl="",
-#             products=products,
-#         ))
-#     return outfits
-
-
-# def _recommendation_to_links(recommendation: dict) -> List[ProductLink]:
-#     recs = recommendation.get("recommendations", [])
-#     links: List[ProductLink] = []
-#     for entry in recs:
-#         for p in entry.get("products", []):
-#             url = p.get("product_url") or ""
-#             links.append(ProductLink(
-#                 name=p.get("product_name") or "",
-#                 url=url,
-#                 price=p.get("product_price") or "",
-#                 platform=_platform_from_url(url),
-#             ))
-#     return links
-
-
-# # ---------------------------------------------------------------------------
-# # Endpoints
-# # ---------------------------------------------------------------------------
-
-# @app.post("/profile/update", status_code=200)
-# async def update_profile(profile: UserProfile):
-#     global _profile
-#     _profile = profile.model_dump()
-#     return {}
-
-
-# @app.post("/outfit/plan", response_model=List[OutfitPlanResponse])
-# async def plan_outfit(request: OutfitPlanRequest):
-#     global _current_outfit_id
-
-#     inputs = _crew_inputs(request.prompt, [])
-#     loop = asyncio.get_event_loop()
-
-#     try:
-#         planning = await loop.run_in_executor(None, Shopai().run_planning, inputs)
-#     except Exception as exc:
-#         raise HTTPException(status_code=500, detail=f"Planning agent failed: {exc}")
-
-#     plan_id = str(uuid.uuid4())
-#     _outfit_store[plan_id] = {"planning": planning, "inputs": inputs}
-#     _current_outfit_id = plan_id
-
-#     return _planning_to_outfit_list(plan_id, planning)
-
-
-# @app.post("/outfit/plan/occasional", response_model=List[OutfitPlanResponse])
-# async def plan_occasional_outfit(request: OccasionalOutfitRequest):
-#     global _current_outfit_id
-
-#     loop = asyncio.get_event_loop()
-#     try:
-#         result = await loop.run_in_executor(
-#             None, lambda: Shopai().plan_occasional_outfit(request.prompt, _profile)
-#         )
-#     except ValueError as exc:
-#         raise HTTPException(status_code=400, detail=str(exc))
-#     except Exception as exc:
-#         raise HTTPException(status_code=500, detail=f"Occasional outfit planning failed: {exc}")
-
-#     plan_id = str(uuid.uuid4())
-#     _outfit_store[plan_id] = {"recommendation": result, "inputs": {"shopping_request": request.prompt}}
-#     _current_outfit_id = plan_id
-
-#     return _recommendation_to_outfit_list(plan_id, result)
-
-
-# @app.get("/outfit/recommendations", response_model=OutfitPlanResponse)
-# async def get_recommendations():
-#     if not _current_outfit_id or _current_outfit_id not in _outfit_store:
-#         raise HTTPException(status_code=404, detail="No outfit plan found. Call /outfit/plan first.")
-
-#     plan_id = _current_outfit_id
-#     entry = _outfit_store[plan_id]
-#     planning = entry["planning"]
-#     inputs = entry["inputs"]
-
-#     loop = asyncio.get_event_loop()
-#     try:
-#         recommendation = await loop.run_in_executor(
-#             None, lambda: Shopai().run_recommendation(inputs, planning)
-#         )
-#     except Exception as exc:
-#         raise HTTPException(status_code=500, detail=f"Recommendation agent failed: {exc}")
-
-#     _outfit_store[plan_id]["recommendation"] = recommendation
-#     products = _recommendation_products(recommendation)
-
-#     return _planning_to_response(plan_id, planning, outfit_idx=0, products=products)
-
-
-# @app.post("/outfit/links", response_model=List[ProductLink])
-# async def get_links(request: GetLinksRequest):
-#     if not _current_outfit_id or _current_outfit_id not in _outfit_store:
-#         raise HTTPException(status_code=404, detail="No outfit plan found. Call /outfit/plan first.")
-
-#     plan_id = _current_outfit_id
-#     entry = _outfit_store[plan_id]
-#     inputs = entry["inputs"]
-
-#     selected_planning = {
-#         "outfits": [
-#             {
-#                 "outfit_name": "Selected Items",
-#                 "items": request.selectedItems,
-#                 "rationale": "User-selected items for link lookup",
-#             }
-#         ]
-#     }
-
-#     loop = asyncio.get_event_loop()
-#     try:
-#         recommendation = await loop.run_in_executor(
-#             None, lambda: Shopai().run_recommendation(inputs, selected_planning)
-#         )
-#     except Exception as exc:
-#         raise HTTPException(status_code=500, detail=f"Recommendation agent failed: {exc}")
-
-#     _outfit_store[plan_id]["recommendation"] = recommendation
-#     return _recommendation_to_links(recommendation)
-
-
-# class VisualizeRequest(BaseModel):
-#     outfitDescription: str
-#     bodyType: str
-#     height: str = ""
-
-
-# @app.post("/outfit/visualize", response_model=VisualizeData)
-# async def visualize_outfit(req: VisualizeRequest):
-#     loop = asyncio.get_event_loop()
-#     try:
-#         viz = await loop.run_in_executor(
-#             None, lambda: Shopai().run_visualization(req.outfitDescription, req.bodyType, req.height)
-#         )
-#     except Exception as exc:
-#         raise HTTPException(status_code=500, detail=str(exc))
-
-#     if error := viz.get("error"):
-#         raise HTTPException(status_code=422, detail=error)
-
-#     image_path = viz.get("image_path", "")
-#     visual_url = f"/static/{os.path.basename(image_path)}" if image_path else ""
-
-#     return VisualizeData(
-#         outfitId="",
-#         visualUrl=visual_url,
-#         outfitName=req.outfitDescription,
-#         items=[],
-#         colorPalette=[],
-#     )
-
-
-# @app.get("/health")
-# def health():
-#     return {"status": "ok"}
+@app.post("/outfit/plan/occasional", response_model=PlanResponse)
+async def plan_occasional(request: PlanRequest) -> PlanResponse:
+    """Guardrail, then the Recommendation Master crew - same pipeline as regular."""
+    return await _plan(request)

@@ -15,6 +15,7 @@ from shopai.prompts import (
     VISUALIZE_PROMPT_TEMPLATE,
 )
 from shopai.tools.outfit_scraper_tool import OutfitScraperTool
+from shopai.tools.validation_tools import validate_request
 from shopai.tools.outfit_visualization_tool import OutfitVisualizationTool
 from shopai.tools.weather_tool import WeatherByLocationTool
 
@@ -118,6 +119,106 @@ class Shopai():
     # ==================================================================
     # HITL step methods
     # ==================================================================
+
+    # ==================================================================
+    # Architecture agents (validator / master / reviewer)
+    #
+    # Deliberately NOT decorated with @agent or @task: CrewBase collects
+    # decorated members into self.agents and self.tasks, which is what crew()
+    # above is built from. Leaving these plain keeps that crew as it was.
+    # Note also that a task config naming an undecorated agent raises a
+    # KeyError at class construction - so their task configs carry no `agent:`.
+    # ==================================================================
+
+    def recommendation_master_agent(self) -> Agent:
+        """Manager of the recommendation crew - delegates, never executes."""
+        return Agent(
+            llm=default_llm(),
+            config=self.agents_config['recommendation_master_agent'],  # type: ignore[index]
+            tools=[],
+            allow_delegation=True,
+            verbose=True,
+        )
+
+    def review_recommendation_agent(self) -> Agent:
+        """Second pass over the curated recommendations."""
+        return Agent(
+            llm=default_llm(),
+            config=self.agents_config['review_recommendation_agent'],  # type: ignore[index]
+            tools=[],
+            verbose=True,
+        )
+
+    def recommendation_crew(self) -> Crew:
+        """Hierarchical crew: the master routes work to the specialists.
+
+        CrewAI requires the manager to sit outside the agents list.
+        """
+        return Crew(
+            agents=[
+                self.recommendation_agent(),
+                self.review_recommendation_agent(),
+                self.visualize_agent(),
+            ],
+            tasks=[
+                Task(config=self.tasks_config['master_recommendation_task']),  # type: ignore[index]
+                Task(config=self.tasks_config['review_recommendation_task']),  # type: ignore[index]
+            ],
+            process=Process.hierarchical,
+            manager_agent=self.recommendation_master_agent(),
+            verbose=True,
+        )
+
+    # ==================================================================
+    # Guardrail
+    # ==================================================================
+
+    def run_validation(self, prompt: str) -> dict:
+        """Guardrail. Runs the validation tools directly - no agent, no LLM.
+
+        Kept as a method so callers do not have to care that the check stopped
+        being agentic.
+
+        Returns:
+            {"intent": ..., "reason": ..., "clarification": ..., "findings": {...}}
+        """
+        return validate_request(prompt)
+
+    def run_master_recommendation(self, prompt: str, profile: dict | None = None) -> dict:
+        """Hand a request to the Recommendation Master crew.
+
+        The master reads the request and decides which specialists run - the
+        API does not route by intent any more.
+
+        Returns:
+            {"recommendations": [...], "summary": "...", "raw": "..."}
+        """
+        profile = profile or {}
+        styles = profile.get("styles") or []
+        inputs = {
+            "shopping_request": prompt,
+            "location": "India",
+            "budget": "5000 INR",
+            "gender": profile.get("gender") or "female",
+            "height": profile.get("height") or "5'6\"",
+            "body_type": profile.get("bodyType") or "average",
+            "style": ", ".join(styles) or "casual",
+        }
+
+        raw = str(self.recommendation_crew().kickoff(inputs=inputs))
+        return self._parse_recommendation_crew_output(raw)
+
+    def _parse_recommendation_crew_output(self, raw: str) -> dict:
+        """The manager writes prose as often as JSON - keep whichever we get."""
+        parsed = self._extract_json_from_text(raw)
+
+        if isinstance(parsed, dict) and isinstance(parsed.get("recommendations"), list):
+            return {"recommendations": parsed["recommendations"], "summary": "", "raw": raw}
+
+        if isinstance(parsed, list):
+            return {"recommendations": parsed, "summary": "", "raw": raw}
+
+        return {"recommendations": [], "summary": raw.strip(), "raw": raw}
 
     def run_planning(self, inputs: dict) -> dict:
         """Run only the planning agent/task.

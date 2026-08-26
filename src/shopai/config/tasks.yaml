@@ -50,3 +50,25 @@ visualize_task:
     a prioritized shortlist, a final summary, and an embedded outfit
     visualization image. Formatted as markdown without '```'
   agent: visualize_agent
+
+master_recommendation_task:
+  description: >
+    Deliver reviewed outfit recommendations for {shopping_request}.
+    The user is {gender}, height {height}, body type {body_type}, style
+    preference {style}, shopping in {location} with a budget of {budget}.
+    Direct the specialists: have the recommendation specialist curate options,
+    have the reviewer judge them against fit, occasion and budget, and send work
+    back for another pass when the reviewer's objections are material.
+  expected_output: >
+    A JSON object with a "recommendations" array. Each entry has outfit_name and
+    a products array of {product_name, product_price, product_url}.
+
+review_recommendation_task:
+  description: >
+    Review the curated recommendations for {shopping_request} against the user's
+    body type ({body_type}), height ({height}), style ({style}), the occasion,
+    and the budget of {budget}. Name what is wrong and what should replace it.
+    Approve outright when the recommendations already hold up.
+  expected_output: >
+    A verdict of approved or needs_changes, followed by the specific objections
+    and the substitution suggested for each.
