@@ -1,5 +1,6 @@
 package com.shopai.android.data.api
 
+import com.shopai.android.BuildConfig
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -7,8 +8,9 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 object RetrofitClient {
-    // 10.0.2.2 is the Android emulator's loopback to the host machine.
-    const val BASE_URL = "http://10.0.2.2:8000/"
+    // From local.properties (API_BASE_URL), defaulting to 10.0.2.2 - the emulator's
+    // loopback to the host. A physical device needs the host's LAN address instead.
+    val BASE_URL: String = BuildConfig.API_BASE_URL
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY

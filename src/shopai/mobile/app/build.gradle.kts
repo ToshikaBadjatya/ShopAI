@@ -25,6 +25,9 @@ android {
         versionCode = 1
         versionName = "1.0"
 
+        // Emulator default; override API_BASE_URL in local.properties for a physical device.
+        val apiBaseUrl = localProperty("API_BASE_URL").ifBlank { "http://10.0.2.2:8000/" }
+        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
         buildConfigField("String", "SUPABASE_URL", "\"${localProperty("SUPABASE_URL")}\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${localProperty("SUPABASE_ANON_KEY")}\"")
     }
