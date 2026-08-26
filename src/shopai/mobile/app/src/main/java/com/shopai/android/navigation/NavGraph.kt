@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -15,10 +16,12 @@ import com.shopai.android.data.model.VisualizeData
 import com.shopai.android.data.repository.OutfitRepository
 import com.shopai.android.prefs.Session
 import com.shopai.android.screens.ChatScreen
+import com.shopai.android.screens.LoginScreen
 import com.shopai.android.screens.MoodScreen
 import com.shopai.android.screens.ProfileScreen
 import com.shopai.android.screens.RecommendationScreen
 import com.shopai.android.screens.VisualizeScreen
+import com.shopai.android.viewmodel.AuthViewModel
 import com.shopai.android.viewmodel.ChatViewModel
 import com.shopai.android.viewmodel.MoodViewModel
 import com.shopai.android.viewmodel.ProfileViewModel
@@ -31,19 +34,60 @@ sealed class Screen(val route: String) {
     object Recommendation : Screen("recommendation")
     object Visualize : Screen("visualize")
     object Chat : Screen("chat")
+    object Login : Screen("login")
 }
 
 @Composable
 fun NavGraph(
     navController: NavHostController = rememberNavController(),
-    startDestination: String = Screen.Mood.route
+    startDestination: String? = null
 ) {
     // Activity-scoped so the screen that starts a request and the screen that shows
     // it share one transcript.
     val activity = LocalContext.current as ComponentActivity
     val chatViewModel: ChatViewModel = viewModel(viewModelStoreOwner = activity)
 
-    NavHost(navController = navController, startDestination = startDestination) {
+    // A stored token decides where the app opens - no session, no app.
+    val start = startDestination ?: remember {
+        if (Session.isLoggedIn(activity)) Screen.Mood.route else Screen.Login.route
+    }
+
+    NavHost(navController = navController, startDestination = start) {
+        composable(Screen.Login.route) {
+            val authViewModel: AuthViewModel = viewModel()
+            val mode by authViewModel.mode.collectAsState()
+            val email by authViewModel.email.collectAsState()
+            val password by authViewModel.password.collectAsState()
+            val confirmPassword by authViewModel.confirmPassword.collectAsState()
+            val submitting by authViewModel.submitting.collectAsState()
+            val error by authViewModel.error.collectAsState()
+            val notice by authViewModel.notice.collectAsState()
+            val loggedIn by authViewModel.loggedIn.collectAsState()
+
+            LaunchedEffect(loggedIn) {
+                if (loggedIn) {
+                    navController.navigate(Screen.Mood.route) {
+                        popUpTo(Screen.Login.route) { inclusive = true }
+                    }
+                }
+            }
+
+            LoginScreen(
+                mode = mode,
+                email = email,
+                password = password,
+                confirmPassword = confirmPassword,
+                submitting = submitting,
+                error = error,
+                notice = notice,
+                onModeChange = { authViewModel.setMode(it) },
+                onEmailChange = { authViewModel.updateEmail(it) },
+                onPasswordChange = { authViewModel.updatePassword(it) },
+                onConfirmPasswordChange = { authViewModel.updateConfirmPassword(it) },
+                onSubmit = { authViewModel.submit() }
+            )
+        }
+
         composable(Screen.Mood.route) {
             val viewModel: MoodViewModel = viewModel()
             val moodText by viewModel.moodText.collectAsState()

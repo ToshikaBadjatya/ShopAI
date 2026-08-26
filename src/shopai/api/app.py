@@ -204,7 +204,7 @@ async def plan_occasional(request: PlanRequest) -> PlanResponse:
 # ===========================================================================
 
 # """ShopAI FastAPI server — Human-in-the-Loop pipeline.
-#
+
 # Endpoints match the Android ShopAIApiService exactly:
 #   POST /profile/update
 #   POST /outfit/plan
@@ -212,34 +212,34 @@ async def plan_occasional(request: PlanRequest) -> PlanResponse:
 #   GET  /outfit/recommendations
 #   POST /outfit/visualize
 # """
-#
+
 # from __future__ import annotations
-#
+
 # import asyncio
 # import os
 # import re
 # import uuid
 # import warnings
 # from typing import List, Optional
-#
+
 # warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
-#
+
 # from fastapi import FastAPI, HTTPException
 # from fastapi.staticfiles import StaticFiles
 # from pydantic import BaseModel
-#
+
 # from shopai.crew import Shopai
 # from shopai.telemetry import setup_telemetry
-#
+
 # setup_telemetry()
-#
+
 # app = FastAPI(title="ShopAI", version="0.1.0")
-#
+
 # # Serve generated images at /static/<filename>
 # _OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "output")
 # os.makedirs(_OUTPUT_DIR, exist_ok=True)
 # app.mount("/static", StaticFiles(directory=_OUTPUT_DIR), name="static")
-#
+
 # # ---------------------------------------------------------------------------
 # # Minimal in-memory state — bridges the three sequential calls.
 # # No sessions; just stores the latest profile and per-outfitId crew outputs.
@@ -247,35 +247,35 @@ async def plan_occasional(request: PlanRequest) -> PlanResponse:
 # _profile: dict = {}
 # _outfit_store: dict[str, dict] = {}   # outfitId → {planning, recommendation}
 # _current_outfit_id: Optional[str] = None
-#
-#
+
+
 # # ---------------------------------------------------------------------------
 # # Request / response models — mirror Android data classes exactly
 # # ---------------------------------------------------------------------------
-#
+
 # class UserProfile(BaseModel):
 #     height: str = ""
 #     bodyType: str = ""
 #     favoriteColors: List[str] = []
 #     styles: List[str] = []
-#
-#
+
+
 # class OutfitPlanRequest(BaseModel):
 #     prompt: str
-#
-#
+
+
 # class OccasionalOutfitRequest(BaseModel):
 #     prompt: str
-#
-#
+
+
 # class ProductData(BaseModel):
 #     id: str = ""
 #     imageUrl: str = ""
 #     name: str = ""
 #     price: str = ""
 #     platform: str = ""
-#
-#
+
+
 # class OutfitPlanResponse(BaseModel):
 #     outfitId: str = ""
 #     outfitName: str = ""
@@ -283,32 +283,32 @@ async def plan_occasional(request: PlanRequest) -> PlanResponse:
 #     tags: List[str] = []
 #     heroImageUrl: str = ""
 #     products: List[ProductData] = []
-#
-#
+
+
 # class VisualizeData(BaseModel):
 #     outfitId: str = ""
 #     visualUrl: str = ""
 #     outfitName: str = ""
 #     items: List[ProductData] = []
 #     colorPalette: List[str] = []
-#
-#
+
+
 # class GetLinksRequest(BaseModel):
 #     outfitId: str = ""
 #     selectedItems: List[str] = []
-#
-#
+
+
 # class ProductLink(BaseModel):
 #     name: str = ""
 #     url: str = ""
 #     price: str = ""
 #     platform: str = ""
-#
-#
+
+
 # # ---------------------------------------------------------------------------
 # # Helpers
 # # ---------------------------------------------------------------------------
-#
+
 # def _platform_from_url(url: str) -> str:
 #     if "amazon" in url:
 #         return "Amazon"
@@ -319,8 +319,8 @@ async def plan_occasional(request: PlanRequest) -> PlanResponse:
 #     if "meesho" in url:
 #         return "Meesho"
 #     return ""
-#
-#
+
+
 # def _crew_inputs(mood_text: str, vibes: List[str]) -> dict:
 #     profile = _profile
 #     style = ", ".join(profile.get("styles", []) + vibes) or "casual"
@@ -333,8 +333,8 @@ async def plan_occasional(request: PlanRequest) -> PlanResponse:
 #         "body_type": profile.get("bodyType", "average"),
 #         "style": style,
 #     }
-#
-#
+
+
 # def _planning_to_outfit_list(plan_id: str, planning: dict, products: List[ProductData] = None) -> List[OutfitPlanResponse]:
 #     outfits = planning.get("outfits", [])[:5]
 #     return [
@@ -348,8 +348,8 @@ async def plan_occasional(request: PlanRequest) -> PlanResponse:
 #         )
 #         for i, outfit in enumerate(outfits)
 #     ]
-#
-#
+
+
 # def _planning_to_response(plan_id: str, planning: dict, outfit_idx: int = 0, products: List[ProductData] = None) -> OutfitPlanResponse:
 #     outfits = planning.get("outfits", [])
 #     outfit = outfits[outfit_idx] if outfit_idx < len(outfits) else {}
@@ -361,8 +361,8 @@ async def plan_occasional(request: PlanRequest) -> PlanResponse:
 #         heroImageUrl="",
 #         products=products or [],
 #     )
-#
-#
+
+
 # def _recommendation_products(recommendation: dict) -> List[ProductData]:
 #     recs = recommendation.get("recommendations", [])
 #     products: List[ProductData] = []
@@ -377,8 +377,8 @@ async def plan_occasional(request: PlanRequest) -> PlanResponse:
 #                 platform=_platform_from_url(url),
 #             ))
 #     return products
-#
-#
+
+
 # def _recommendation_to_outfit_list(plan_id: str, recommendation: dict) -> List[OutfitPlanResponse]:
 #     recs = recommendation.get("recommendations", [])[:5]
 #     outfits: List[OutfitPlanResponse] = []
@@ -402,8 +402,8 @@ async def plan_occasional(request: PlanRequest) -> PlanResponse:
 #             products=products,
 #         ))
 #     return outfits
-#
-#
+
+
 # def _recommendation_to_links(recommendation: dict) -> List[ProductLink]:
 #     recs = recommendation.get("recommendations", [])
 #     links: List[ProductLink] = []
@@ -417,42 +417,42 @@ async def plan_occasional(request: PlanRequest) -> PlanResponse:
 #                 platform=_platform_from_url(url),
 #             ))
 #     return links
-#
-#
+
+
 # # ---------------------------------------------------------------------------
 # # Endpoints
 # # ---------------------------------------------------------------------------
-#
+
 # @app.post("/profile/update", status_code=200)
 # async def update_profile(profile: UserProfile):
 #     global _profile
 #     _profile = profile.model_dump()
 #     return {}
-#
-#
+
+
 # @app.post("/outfit/plan", response_model=List[OutfitPlanResponse])
 # async def plan_outfit(request: OutfitPlanRequest):
 #     global _current_outfit_id
-#
+
 #     inputs = _crew_inputs(request.prompt, [])
 #     loop = asyncio.get_event_loop()
-#
+
 #     try:
 #         planning = await loop.run_in_executor(None, Shopai().run_planning, inputs)
 #     except Exception as exc:
 #         raise HTTPException(status_code=500, detail=f"Planning agent failed: {exc}")
-#
+
 #     plan_id = str(uuid.uuid4())
 #     _outfit_store[plan_id] = {"planning": planning, "inputs": inputs}
 #     _current_outfit_id = plan_id
-#
+
 #     return _planning_to_outfit_list(plan_id, planning)
-#
-#
+
+
 # @app.post("/outfit/plan/occasional", response_model=List[OutfitPlanResponse])
 # async def plan_occasional_outfit(request: OccasionalOutfitRequest):
 #     global _current_outfit_id
-#
+
 #     loop = asyncio.get_event_loop()
 #     try:
 #         result = await loop.run_in_executor(
@@ -462,24 +462,24 @@ async def plan_occasional(request: PlanRequest) -> PlanResponse:
 #         raise HTTPException(status_code=400, detail=str(exc))
 #     except Exception as exc:
 #         raise HTTPException(status_code=500, detail=f"Occasional outfit planning failed: {exc}")
-#
+
 #     plan_id = str(uuid.uuid4())
 #     _outfit_store[plan_id] = {"recommendation": result, "inputs": {"shopping_request": request.prompt}}
 #     _current_outfit_id = plan_id
-#
+
 #     return _recommendation_to_outfit_list(plan_id, result)
-#
-#
+
+
 # @app.get("/outfit/recommendations", response_model=OutfitPlanResponse)
 # async def get_recommendations():
 #     if not _current_outfit_id or _current_outfit_id not in _outfit_store:
 #         raise HTTPException(status_code=404, detail="No outfit plan found. Call /outfit/plan first.")
-#
+
 #     plan_id = _current_outfit_id
 #     entry = _outfit_store[plan_id]
 #     planning = entry["planning"]
 #     inputs = entry["inputs"]
-#
+
 #     loop = asyncio.get_event_loop()
 #     try:
 #         recommendation = await loop.run_in_executor(
@@ -487,22 +487,22 @@ async def plan_occasional(request: PlanRequest) -> PlanResponse:
 #         )
 #     except Exception as exc:
 #         raise HTTPException(status_code=500, detail=f"Recommendation agent failed: {exc}")
-#
+
 #     _outfit_store[plan_id]["recommendation"] = recommendation
 #     products = _recommendation_products(recommendation)
-#
+
 #     return _planning_to_response(plan_id, planning, outfit_idx=0, products=products)
-#
-#
+
+
 # @app.post("/outfit/links", response_model=List[ProductLink])
 # async def get_links(request: GetLinksRequest):
 #     if not _current_outfit_id or _current_outfit_id not in _outfit_store:
 #         raise HTTPException(status_code=404, detail="No outfit plan found. Call /outfit/plan first.")
-#
+
 #     plan_id = _current_outfit_id
 #     entry = _outfit_store[plan_id]
 #     inputs = entry["inputs"]
-#
+
 #     selected_planning = {
 #         "outfits": [
 #             {
@@ -512,7 +512,7 @@ async def plan_occasional(request: PlanRequest) -> PlanResponse:
 #             }
 #         ]
 #     }
-#
+
 #     loop = asyncio.get_event_loop()
 #     try:
 #         recommendation = await loop.run_in_executor(
@@ -520,17 +520,17 @@ async def plan_occasional(request: PlanRequest) -> PlanResponse:
 #         )
 #     except Exception as exc:
 #         raise HTTPException(status_code=500, detail=f"Recommendation agent failed: {exc}")
-#
+
 #     _outfit_store[plan_id]["recommendation"] = recommendation
 #     return _recommendation_to_links(recommendation)
-#
-#
+
+
 # class VisualizeRequest(BaseModel):
 #     outfitDescription: str
 #     bodyType: str
 #     height: str = ""
-#
-#
+
+
 # @app.post("/outfit/visualize", response_model=VisualizeData)
 # async def visualize_outfit(req: VisualizeRequest):
 #     loop = asyncio.get_event_loop()
@@ -540,13 +540,13 @@ async def plan_occasional(request: PlanRequest) -> PlanResponse:
 #         )
 #     except Exception as exc:
 #         raise HTTPException(status_code=500, detail=str(exc))
-#
+
 #     if error := viz.get("error"):
 #         raise HTTPException(status_code=422, detail=error)
-#
+
 #     image_path = viz.get("image_path", "")
 #     visual_url = f"/static/{os.path.basename(image_path)}" if image_path else ""
-#
+
 #     return VisualizeData(
 #         outfitId="",
 #         visualUrl=visual_url,
@@ -554,8 +554,8 @@ async def plan_occasional(request: PlanRequest) -> PlanResponse:
 #         items=[],
 #         colorPalette=[],
 #     )
-#
-#
+
+
 # @app.get("/health")
 # def health():
 #     return {"status": "ok"}
