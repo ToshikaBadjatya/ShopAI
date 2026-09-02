@@ -1,12 +1,12 @@
 """ShopAI FastAPI server.
 
 Two endpoints, both taking a prompt and an optional user token:
-  POST /outfit/plan/regular      guardrail -> planning crew
-  POST /outfit/plan/occasional   guardrail -> Recommendation Master crew
+  POST /outfit/plan/regular
+  POST /outfit/plan/occasional
 
-Every request is validated first. Only an in_scope verdict reaches an agent;
-anything else comes straight back as an error envelope the chat can render.
-The previous API surface lives in dummy_app.py, which nothing serves.
+Every request is validated first. Only an allowed request reaches the
+Recommendation Master agent; anything else comes straight back as an error
+envelope the chat can render.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ _OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "output")
 os.makedirs(_OUTPUT_DIR, exist_ok=True)
 app.mount("/static", StaticFiles(directory=_OUTPUT_DIR), name="static")
 
-# planId -> {planning|recommendation, inputs, userToken, validation}
+# planId -> {recommendation, inputs, userToken, validation}
 _plan_store: dict[str, dict] = {}
 
 
@@ -71,7 +71,7 @@ class PlanResponse(BaseModel):
     `kind` tells the client what it is holding:
       plan       - `outfits` is populated
       message    - plain reply from Sia, `message` only
-      permission - Sia needs access before continuing
+      permission - Sia needs access before continuing, `message` explains what
       error      - `message` says what went wrong, `errorKind` how to show it
     """
 
@@ -94,50 +94,6 @@ def _platform_from_url(url: str) -> str:
     return ""
 
 
-def _crew_inputs(prompt: str) -> dict:
-    return {
-        "shopping_request": prompt,
-        "location": "India",
-        "budget": "5000 INR",
-        "gender": "female",
-        "height": "5'6\"",
-        "body_type": "average",
-        "style": "casual",
-    }
-
-
-def _as_tags(items) -> List[str]:
-    """The planning agent returns items as plain strings or as dicts - take both."""
-    tags: List[str] = []
-    for item in items or []:
-        if isinstance(item, str):
-            tags.append(item)
-        elif isinstance(item, dict):
-            label = (
-                item.get("piece")
-                or item.get("item")
-                or item.get("name")
-                or next((v for v in item.values() if isinstance(v, str)), "")
-            )
-            if label:
-                tags.append(label)
-        else:
-            tags.append(str(item))
-    return tags
-
-
-def _planning_to_outfits(plan_id: str, planning: dict) -> List[OutfitPlanResponse]:
-    return [
-        OutfitPlanResponse(
-            outfitId=f"{plan_id}:{i}",
-            outfitName=outfit.get("outfit_name", ""),
-            description=outfit.get("rationale", ""),
-            tags=_as_tags(outfit.get("items")),
-        )
-        for i, outfit in enumerate(planning.get("outfits", [])[:5])
-    ]
-
-
 def _recommendation_to_outfits(plan_id: str, recommendation: dict) -> List[OutfitPlanResponse]:
     outfits: List[OutfitPlanResponse] = []
     for i, entry in enumerate(recommendation.get("recommendations", [])[:5]):
@@ -149,7 +105,6 @@ def _recommendation_to_outfits(plan_id: str, recommendation: dict) -> List[Outfi
                 platform=_platform_from_url(p.get("product_url") or ""),
             )
             for j, p in enumerate(entry.get("products", []))
-            if isinstance(p, dict)
         ]
         outfits.append(
             OutfitPlanResponse(
@@ -176,7 +131,7 @@ def _failure(message: str, error_kind: str = "system_down") -> PlanResponse:
     return PlanResponse(kind="error", message=message, errorKind=error_kind)
 
 
-# How a rejection is drawn in the chat.
+# How a guardrail rejection is drawn in the chat.
 _REJECTION_KIND = {
     "out_of_scope": "out_of_scope",
     "not_allowed": "not_allowed",
@@ -214,9 +169,8 @@ async def _guard(prompt: str) -> tuple[dict, Optional[PlanResponse]]:
 async def _plan(request: PlanRequest) -> PlanResponse:
     """Guardrail, then hand the request to the Recommendation Master agent.
 
-    Both routes share this: the API no longer decides what a request is, so
-    there is nothing left to differentiate them here. The master reads the
-    request and picks the specialists.
+    Both routes share this: the API does not decide what a request is beyond
+    pass/fail - the master reads it and picks the specialists.
     """
     verdict, rejection = await _guard(request.prompt)
     if rejection is not None:
