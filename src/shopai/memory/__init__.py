@@ -10,22 +10,28 @@
     memory.conversation.add_to_conversation(user_id, run_id, "loved the velvet mini")
     memory.conversation.compact(user_id, run_id)
 
-Further memory types (task, wardrobe) register themselves here as they are built.
+    memory.task.plan_task(run_id, agent="recommendation_agent", task="curate looks")
+    memory.task.get_status(run_id)
+
+Further memory types (wardrobe) register themselves here as they are built.
 """
 
 from shopai.memory.base import Memory, MemoryManager
 from shopai.memory.conversation_memory import ConversationMemory
+from shopai.memory.task_memory import TaskMemory
 from shopai.memory.user_memory import UserInfoMemory, user_id_from_token
 
 memory = MemoryManager()
 memory.register(UserInfoMemory())
 memory.register(ConversationMemory())
+memory.register(TaskMemory())
 
 __all__ = [
     "Memory",
     "MemoryManager",
     "UserInfoMemory",
     "ConversationMemory",
+    "TaskMemory",
     "memory",
     "user_id_from_token",
 ]

@@ -1,5 +1,6 @@
 import json
 import re
+import uuid
 
 from crewai import Agent, Crew, Process, Task
 from crewai.project import CrewBase, agent, crew, task
@@ -15,6 +16,7 @@ from shopai.prompts import (
     VISUALIZE_PROMPT_TEMPLATE,
 )
 from shopai.tools.outfit_scraper_tool import OutfitScraperTool
+from shopai.tools.task_ledger_tools import task_ledger_tools
 from shopai.tools.validation_tools import validate_request
 from shopai.tools.outfit_visualization_tool import OutfitVisualizationTool
 from shopai.tools.weather_tool import WeatherByLocationTool
@@ -130,12 +132,18 @@ class Shopai():
     # KeyError at class construction - so their task configs carry no `agent:`.
     # ==================================================================
 
-    def recommendation_master_agent(self) -> Agent:
-        """Manager of the recommendation crew - delegates, never executes."""
+    def recommendation_master_agent(self, run_id: str = "") -> Agent:
+        """Manager of the recommendation crew - delegates, never executes.
+
+        With a run_id it also carries the task ledger, so it can plan the steps
+        it is delegating and track what came back. Without one it gets no
+        ledger rather than a shared global one - two runs writing to the same
+        ledger would be worse than no ledger at all.
+        """
         return Agent(
             llm=default_llm(),
             config=self.agents_config['recommendation_master_agent'],  # type: ignore[index]
-            tools=[],
+            tools=task_ledger_tools(run_id) if run_id else [],
             allow_delegation=True,
             verbose=True,
         )
@@ -149,7 +157,7 @@ class Shopai():
             verbose=True,
         )
 
-    def recommendation_crew(self) -> Crew:
+    def recommendation_crew(self, run_id: str = "") -> Crew:
         """Hierarchical crew: the master routes work to the specialists.
 
         CrewAI requires the manager to sit outside the agents list.
@@ -165,7 +173,7 @@ class Shopai():
                 Task(config=self.tasks_config['review_recommendation_task']),  # type: ignore[index]
             ],
             process=Process.hierarchical,
-            manager_agent=self.recommendation_master_agent(),
+            manager_agent=self.recommendation_master_agent(run_id),
             verbose=True,
         )
 
@@ -184,15 +192,20 @@ class Shopai():
         """
         return validate_request(prompt)
 
-    def run_master_recommendation(self, prompt: str, profile: dict | None = None) -> dict:
+    def run_master_recommendation(
+        self, prompt: str, profile: dict | None = None, run_id: str | None = None
+    ) -> dict:
         """Hand a request to the Recommendation Master crew.
 
         The master reads the request and decides which specialists run - the
-        API does not route by intent any more.
+        API does not route by intent any more. It plans those steps into the
+        task ledger under `run_id`, which is returned so a caller can read the
+        ledger back with `memory.task.get_status(run_id)`.
 
         Returns:
-            {"recommendations": [...], "summary": "...", "raw": "..."}
+            {"recommendations": [...], "summary": "...", "raw": "...", "run_id": "..."}
         """
+        run_id = run_id or str(uuid.uuid4())
         profile = profile or {}
         styles = profile.get("styles") or []
         inputs = {
@@ -205,8 +218,8 @@ class Shopai():
             "style": ", ".join(styles) or "casual",
         }
 
-        raw = str(self.recommendation_crew().kickoff(inputs=inputs))
-        return self._parse_recommendation_crew_output(raw)
+        raw = str(self.recommendation_crew(run_id).kickoff(inputs=inputs))
+        return {**self._parse_recommendation_crew_output(raw), "run_id": run_id}
 
     def _parse_recommendation_crew_output(self, raw: str) -> dict:
         """The manager writes prose as often as JSON - keep whichever we get."""
