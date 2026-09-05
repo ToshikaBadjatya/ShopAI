@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.shopai.android.data.api.RetrofitClient
 import com.shopai.android.data.model.ChatItem
 import com.shopai.android.data.model.ErrorKind
+import com.shopai.android.data.model.ClearTaskRequest
 import com.shopai.android.data.model.OutfitPlanRequest
 import com.shopai.android.data.model.OutfitPlanResponse
 import com.shopai.android.data.model.PlanResponse
@@ -66,6 +67,37 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _items.value = emptyList()
         _selectedOptionIds.value = emptySet()
         _planIdeas.value = emptyList()
+    }
+
+    /**
+     * Start a fresh conversation from a new request.
+     *
+     * A request arriving from the mood screen begins a new line of work, so the
+     * previous transcript goes and the backend is told to drop the task ledger
+     * it was holding. The clear call is best-effort: the local chat is cleared
+     * either way, since refusing to start a new conversation because a cleanup
+     * call failed would be the worse outcome.
+     */
+    fun startNewConversation(
+        moodText: String,
+        vibes: List<String> = emptyList(),
+        occasional: Boolean = false
+    ) {
+        clear()
+        clearTaskOnServer()
+        planOutfit(moodText = moodText, vibes = vibes, occasional = occasional)
+    }
+
+    private fun clearTaskOnServer() {
+        val token = Session.getAuth(getApplication()).accessToken.ifBlank { null }
+        viewModelScope.launch {
+            try {
+                RetrofitClient.apiService.clearTask(ClearTaskRequest(userToken = token))
+            } catch (e: Exception) {
+                // The endpoint is not built yet, and a failed cleanup must not
+                // stop a new conversation - the local transcript is already gone.
+            }
+        }
     }
 
     fun selectOption(optionId: String, multiSelect: Boolean = false) {

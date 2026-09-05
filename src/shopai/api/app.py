@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from shopai.crew import Shopai
+from shopai.memory import memory
 from shopai.telemetry import setup_telemetry
 
 setup_telemetry()
@@ -207,3 +208,10 @@ async def plan_regular(request: PlanRequest) -> PlanResponse:
 async def plan_occasional(request: PlanRequest) -> PlanResponse:
     """Guardrail, then the Recommendation Master crew - same pipeline as regular."""
     return await _plan(request)
+
+
+@app.delete("/task/{run_id}")
+async def clear_task(run_id: str) -> dict:
+    """Discard a run's task ledger entirely."""
+    cleared = memory.task.delete(run_id)
+    return {"cleared": cleared}

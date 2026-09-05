@@ -30,6 +30,11 @@ data class OutfitPlanResponse(
     val products: List<ProductData> = emptyList()
 )
 
+/** Asks the backend to drop whatever task ledger it is holding for this user. */
+data class ClearTaskRequest(
+    val userToken: String? = null
+)
+
 /**
  * One shape for every plan outcome. [kind] says what the body holds:
  * `plan` (outfits populated), `message`, `permission`, or `error`.

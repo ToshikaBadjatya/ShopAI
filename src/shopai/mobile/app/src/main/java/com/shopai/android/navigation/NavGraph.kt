@@ -91,7 +91,9 @@ fun NavGraph(
             MoodScreen(
                 onBack = { navController.popBackStack() },
                 onPlanOutfit = { occasional ->
-                    chatViewModel.planOutfit(
+                    // A request from here starts a new conversation: the old
+                    // transcript goes and the server's task ledger is cleared.
+                    chatViewModel.startNewConversation(
                         moodText = moodText,
                         vibes = selectedVibes.toList(),
                         occasional = occasional

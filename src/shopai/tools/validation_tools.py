@@ -20,6 +20,52 @@ from pydantic import BaseModel, Field
 # Vocabularies
 # ---------------------------------------------------------------------------
 
+COLOR_TERMS = {
+    "black", "white", "ivory", "cream", "beige", "nude", "tan", "brown", "chocolate",
+    "grey", "gray", "charcoal", "silver", "gold", "rose", "copper", "bronze",
+    "red", "maroon", "burgundy", "wine", "crimson", "scarlet", "rust",
+    "pink", "blush", "fuchsia", "magenta", "coral", "peach", "salmon",
+    "orange", "amber", "mustard", "yellow", "lemon",
+    "green", "olive", "emerald", "sage", "mint", "teal", "forest",
+    "blue", "navy", "cobalt", "indigo", "denim", "powder", "turquoise", "aqua",
+    "purple", "lavender", "lilac", "violet", "plum", "mauve",
+    "pastel", "pastels", "neon", "metallic", "monochrome", "neutral", "neutrals",
+    "jewel", "earthy", "muted", "bright", "dark", "light", "warm", "cool",
+}
+
+SILHOUETTE_TERMS = {
+    "silhouette", "silhouettes", "fitted", "loose", "oversized", "relaxed", "tailored",
+    "structured", "flowy", "draped", "bodycon", "wrap", "shift", "slip", "sheath",
+    "a-line", "aline", "empire", "peplum", "flared", "straight", "skinny", "wide-leg",
+    "wideleg", "bootcut", "cropped", "high-waisted", "highwaisted", "low-rise",
+    "midi", "maxi", "mini", "knee-length", "ankle-length", "floor-length",
+    "sleeveless", "strapless", "halter", "off-shoulder", "puffed", "balloon",
+    "v-neck", "vneck", "square-neck", "boat-neck", "collared", "layered", "asymmetric",
+}
+
+EVENT_TERMS = {
+    "party", "wedding", "marriage", "shaadi", "engagement", "reception", "sangeet",
+    "mehendi", "haldi", "cocktail", "birthday", "anniversary", "graduation",
+    "festival", "diwali", "holi", "eid", "christmas", "navratri", "puja", "pooja",
+    "date", "brunch", "dinner", "lunch", "night-out", "clubbing", "concert",
+    "interview", "presentation", "meeting", "conference", "offsite", "farewell",
+    "travel", "vacation", "holiday", "honeymoon", "beach", "resort", "cruise",
+    "gym", "workout", "yoga", "run", "hike", "college", "school", "reunion",
+    "funeral", "temple", "church", "baby-shower", "housewarming",
+}
+
+VIBE_TERMS = {
+    "corporate", "professional", "business", "boardroom", "workwear",
+    "casual", "smart-casual", "semi-formal", "formal", "black-tie",
+    "chic", "elegant", "classy", "sophisticated", "polished", "minimal", "minimalist",
+    "bold", "dramatic", "statement", "edgy", "grunge", "punk", "rebel",
+    "boho", "bohemian", "romantic", "feminine", "flirty", "playful", "quirky",
+    "vintage", "retro", "classic", "timeless", "preppy", "sporty", "athleisure",
+    "streetwear", "street", "y2k", "coquette", "cottagecore", "clean-girl",
+    "glam", "glamorous", "sultry", "sexy", "cozy", "comfy", "effortless",
+    "traditional", "indo-western", "fusion", "festive", "summery", "wintery",
+}
+
 FASHION_TERMS = {
     "outfit", "outfits", "look", "looks", "style", "styling", "stylish", "wear",
     "wearing", "dress", "dresses", "shirt", "tshirt", "t-shirt", "top", "tops",
@@ -31,13 +77,14 @@ FASHION_TERMS = {
     "clothes", "clothing", "garment", "garments", "attire", "apparel", "outfitted",
     "jumpsuit", "gown", "tee", "hoodie", "sweater", "scarf", "belt", "watch",
     "sunglasses", "ethnic", "western", "denim", "leather", "silk", "satin", "velvet",
-}
+    "cotton", "linen", "chiffon", "georgette", "organza", "wool", "knit", "lace",
+    "co-ord", "coord", "kurti", "salwar", "anarkali", "sherwani", "dupatta", "palazzo",
+    "shrug", "cardigan", "waistcoat", "trench", "bomber", "camisole", "bodysuit",
+    "loafers", "flats", "mules", "wedges", "juttis", "kolhapuris", "clutch", "tote",
+} | COLOR_TERMS | SILHOUETTE_TERMS
 
-OCCASION_TERMS = {
-    "party", "wedding", "engagement", "office", "work", "interview", "date",
-    "brunch", "dinner", "festival", "diwali", "casual", "formal", "travel",
-    "vacation", "beach", "gym", "workout", "college", "reception", "sangeet",
-}
+# An occasion is an event, or a vibe specific enough to dress for ("corporate look").
+OCCASION_TERMS = EVENT_TERMS | VIBE_TERMS | {"office", "work"}
 
 OUT_OF_SCOPE_TERMS = {
     "weather", "forecast", "temperature", "news", "stock", "crypto", "recipe",
@@ -61,6 +108,8 @@ DISALLOWED_PATTERNS = [
 CONTEXT_SLOTS = {
     "occasion": OCCASION_TERMS,
     "garment": FASHION_TERMS,
+    "color": COLOR_TERMS,
+    "silhouette": SILHOUETTE_TERMS,
     "budget": {"budget", "under", "cheap", "affordable", "premium", "rupees", "inr", "rs", "price"},
     "timing": {"today", "tonight", "tomorrow", "weekend", "friday", "saturday", "sunday",
                "monday", "tuesday", "wednesday", "thursday", "morning", "evening", "night"},
@@ -110,6 +159,10 @@ class IntentValidatorTool(BaseTool):
             "intent": bucket,
             "fashion_terms": fashion,
             "occasion_terms": occasion,
+            "colors": _hits(request, COLOR_TERMS),
+            "silhouettes": _hits(request, SILHOUETTE_TERMS),
+            "events": _hits(request, EVENT_TERMS),
+            "vibes": _hits(request, VIBE_TERMS),
             "other_domain_terms": other,
         })
 
@@ -179,6 +232,8 @@ class IncompleteContextTool(BaseTool):
         questions = {
             "occasion": "What's the occasion?",
             "garment": "What kind of pieces are you after?",
+            "color": "Any colours you want to lean into?",
+            "silhouette": "What kind of fit or shape are you after?",
             "budget": "Roughly what budget are you working with?",
             "timing": "When do you need it for?",
         }
