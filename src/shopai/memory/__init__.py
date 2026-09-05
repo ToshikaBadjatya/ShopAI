@@ -19,12 +19,14 @@ Further memory types (wardrobe) register themselves here as they are built.
 from shopai.memory.base import Memory, MemoryManager
 from shopai.memory.conversation_memory import ConversationMemory
 from shopai.memory.task_memory import TaskMemory
+from shopai.memory.tool_memory import ToolMemory
 from shopai.memory.user_memory import UserInfoMemory, user_id_from_token
 
 memory = MemoryManager()
 memory.register(UserInfoMemory())
 memory.register(ConversationMemory())
 memory.register(TaskMemory())
+memory.register(ToolMemory())
 
 __all__ = [
     "Memory",
@@ -32,6 +34,7 @@ __all__ = [
     "UserInfoMemory",
     "ConversationMemory",
     "TaskMemory",
+    "ToolMemory",
     "memory",
     "user_id_from_token",
 ]
