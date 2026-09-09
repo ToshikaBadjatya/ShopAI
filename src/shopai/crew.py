@@ -183,7 +183,7 @@ class Shopai():
         delegates would be answering its own question.
         """
         return Agent(
-            llm=llm_for(CLARIFICATION_MODEL) if CLARIFICATION_MODEL else default_llm(),
+            llm= default_llm(),
             config=self.agents_config['clarification_agent'],  # type: ignore[index]
             tools=[FindMissingSegmentsTool()],
             allow_delegation=False,
