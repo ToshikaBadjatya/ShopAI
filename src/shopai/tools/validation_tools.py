@@ -238,9 +238,10 @@ REJECTION_MESSAGES = {
 def validate_request(prompt: str) -> dict:
     """Run every registered check and answer one question: does this pass?
 
-    The guardrail no longer names what a request is - that judgement belongs to
-    the Recommendation Master agent downstream. All this decides is whether the
-    request reaches it, and if not, which line the user is shown.
+    The guardrail no longer names what a request is, nor whether it is specific
+    enough - both judgements belong downstream. A vague request is not refused
+    here; it is scored by `shopai.clarity` and routed to a workflow that can
+    handle vagueness. All this decides is safety and scope.
 
     Returns:
         {"allowed": bool,
@@ -287,15 +288,6 @@ def validate_request(prompt: str) -> dict:
         return blocked(
             "out_of_scope",
             f"That reads as a question about {competing}, not styling or shopping.",
-        )
-
-    context = findings.get("incomplete_context", {})
-    if not context.get("sufficient", False):
-        missing = ", ".join(context.get("missing", [])) or "details"
-        return blocked(
-            "needs_clarification",
-            f"Not enough to plan with yet - missing {missing}.",
-            context.get("suggested_question") or "Could you tell me a bit more?",
         )
 
     return {
