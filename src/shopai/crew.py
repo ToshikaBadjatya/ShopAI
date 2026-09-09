@@ -240,9 +240,17 @@ class Shopai():
 
         scored_text = prompt
         if access_token:
-            scored_text = memory.conversation.user_text(
-                run_id, access_token=access_token
-            ) or prompt
+            try:
+                scored_text = memory.conversation.user_text(
+                    run_id, access_token=access_token
+                ) or prompt
+            except Exception:
+                # A Supabase token is short-lived and the app does not refresh
+                # it yet, so an expired one here is routine. Falling back to
+                # scoring this message alone loses the run's earlier turns,
+                # not the run itself - better than failing the whole request
+                # over a transcript read.
+                pass
         clarity = score_request(scored_text)
 
         inputs = {

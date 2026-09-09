@@ -126,6 +126,31 @@ def test_a_compaction_failure_does_not_cost_the_user_their_answer():
     assert response.json()["message"] == "What's the occasion?"
 
 
+def test_an_expired_session_token_does_not_500_the_plan():
+    """Regression: a Supabase access token is short-lived (~1h) and the app
+    does not refresh it, so this is routine, not exceptional. Recording the
+    transcript must not be able to block the plan itself."""
+    with patch("shopai.api.app.Shopai") as shopai, \
+         patch("shopai.api.app.memory") as mem:
+        mem.conversation.append.side_effect = Exception("JWT expired")
+        shopai.return_value.run_validation.return_value = {
+            "allowed": True, "rejection": "", "message": "", "findings": {}
+        }
+        shopai.return_value.run_master_recommendation.return_value = {
+            "recommendations": [], "summary": "What's the occasion?",
+            "raw": "", "run_id": "run-1", "clarity": {"tier": "low"},
+        }
+        response = client.post(
+            "/outfit/plan/regular",
+            json={"prompt": "help me with my style", "userToken": "stale-tok"},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["kind"] == "message"
+    assert body["message"] == "What's the occasion?"
+
+
 def test_an_out_of_scope_request_is_still_refused():
     with patch("shopai.api.app.Shopai") as shopai, \
          patch("shopai.api.app.memory"):

@@ -170,6 +170,23 @@ async def _guard(prompt: str) -> tuple[dict, Optional[PlanResponse]]:
 # Endpoints
 # ---------------------------------------------------------------------------
 
+def _append_turn(run_id: str, sender: str, message: str, access_token: str) -> None:
+    """Record one turn in the transcript. Best-effort, like compaction below.
+
+    A Supabase access token is short-lived (~1h) and the app does not refresh
+    it yet, so an expired token here is routine, not exceptional - it must
+    not cost the user their plan. Recording the transcript is infrastructure
+    for scoring and history; it is not the thing the user asked for.
+    """
+    if not access_token:
+        return
+
+    try:
+        memory.conversation.append(run_id, sender, message, access_token=access_token)
+    except Exception:
+        pass
+
+
 def _compact_if_full(run_id: str, access_token: str) -> None:
     """Fold the conversation down if it has filled the context window.
 
@@ -201,8 +218,7 @@ async def _plan(request: PlanRequest) -> PlanResponse:
     token = request.userToken or ""
     run_id = request.runId or str(uuid.uuid4())
 
-    if token:
-        memory.conversation.append(run_id, "user", request.prompt, access_token=token)
+    _append_turn(run_id, "user", request.prompt, token)
 
     verdict, rejection = await _guard(request.prompt)
     if rejection is not None:
@@ -240,8 +256,8 @@ async def _plan(request: PlanRequest) -> PlanResponse:
     )
     response.runId = run_id
 
-    if token and response.message:
-        memory.conversation.append(run_id, "agent", response.message, access_token=token)
+    if response.message:
+        _append_turn(run_id, "agent", response.message, token)
 
     _compact_if_full(run_id, token)
     return response

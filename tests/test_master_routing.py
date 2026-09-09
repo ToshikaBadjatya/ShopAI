@@ -53,3 +53,23 @@ def test_run_id_still_reaches_the_crew_inputs():
     _, crew = _run("wedding guest dress")
     inputs = crew.kickoff.call_args.kwargs["inputs"]
     assert inputs["run_id"]
+
+
+def test_a_transcript_read_failure_falls_back_to_this_message_alone():
+    """Regression: a Supabase access token is short-lived (~1h) and the app
+    does not refresh it, so an expired token on the transcript read is
+    routine. It must degrade to scoring this message alone, not fail the
+    whole request."""
+    crew = MagicMock()
+    crew.kickoff.return_value = "{}"
+    shopai = Shopai()
+    with patch.object(shopai, "recommendation_crew", return_value=crew), \
+         patch("shopai.crew.memory") as mem:
+        mem.conversation.user_text.side_effect = Exception("JWT expired")
+        result = shopai.run_master_recommendation(
+            "black fitted midi dress for a cocktail party with gold jewellery",
+            {},
+            access_token="stale-tok",
+        )
+
+    assert result["clarity"]["tier"] == "high"

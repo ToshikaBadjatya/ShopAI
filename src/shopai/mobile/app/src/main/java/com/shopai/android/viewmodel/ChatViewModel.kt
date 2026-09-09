@@ -4,12 +4,12 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.shopai.android.data.api.RetrofitClient
+import com.shopai.android.data.api.SupabaseAuth
 import com.shopai.android.data.model.ChatItem
 import com.shopai.android.data.model.ErrorKind
 import com.shopai.android.data.model.OutfitPlanRequest
 import com.shopai.android.data.model.OutfitPlanResponse
 import com.shopai.android.data.model.PlanResponse
-import com.shopai.android.prefs.Session
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -182,7 +182,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val request = OutfitPlanRequest(
                     prompt = prompt,
-                    userToken = Session.getAuth(getApplication()).accessToken.ifBlank { null },
+                    userToken = SupabaseAuth.freshAccessToken(getApplication()),
                     runId = currentRunId
                 )
                 val response = if (occasional) {
