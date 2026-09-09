@@ -59,6 +59,9 @@ master_recommendation_task:
     Direct the specialists: have the recommendation specialist curate options,
     have the reviewer judge them against fit, occasion and budget, and send work
     back for another pass when the reviewer's objections are material.
+
+    You are working on run {run_id}. Your ledger tools already write to this
+    run - they take no run id, so plan and update steps without naming one.
   expected_output: >
     A JSON object with a "recommendations" array. Each entry has outfit_name and
     a products array of {product_name, product_price, product_url}.

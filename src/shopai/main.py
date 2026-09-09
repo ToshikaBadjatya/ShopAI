@@ -145,6 +145,10 @@ def run_api():
         host=host,
         port=port,
         reload=True,
+        # Agent roles, goals and task descriptions live in YAML, and uvicorn's
+        # reloader watches *.py only - without this, editing a prompt changes
+        # nothing until the server is restarted by hand.
+        reload_includes=["*.py", "*.yaml"],
     )
 
 

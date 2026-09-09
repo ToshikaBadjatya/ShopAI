@@ -1139,10 +1139,16 @@ from shopai.crew import Shopai
 def _run(prompt, user_text=None):
     crew = MagicMock()
     crew.kickoff.return_value = "{}"
-    with patch.object(Shopai, "recommendation_crew", return_value=crew), \
+
+    # Patch the instance, never the class. @CrewBase's metaclass walks class
+    # attributes expecting descriptors during __call__, and a MagicMock raises
+    # AttributeError: __get__ - so patch.object(Shopai, ...) fails before your
+    # test body ever runs.
+    shopai = Shopai()
+    with patch.object(shopai, "recommendation_crew", return_value=crew), \
          patch("shopai.crew.memory") as mem:
         mem.conversation.user_text.return_value = user_text if user_text is not None else prompt
-        result = Shopai().run_master_recommendation(prompt, {}, access_token="tok")
+        result = shopai.run_master_recommendation(prompt, {}, access_token="tok")
     return result, crew
 
 

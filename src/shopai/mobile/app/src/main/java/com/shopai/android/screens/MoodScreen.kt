@@ -193,13 +193,7 @@ fun MoodScreen(
                                 color = TextHint,
                                 modifier = Modifier.weight(1f)
                             )
-                            IconButton(onClick = {}) {
-                                Icon(
-                                    imageVector = Icons.Default.Image,
-                                    contentDescription = "Image input",
-                                    tint = Color(0xFF6B6B80)
-                                )
-                            }
+
                             IconButton(onClick = planOutfit) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.Send,

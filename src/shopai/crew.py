@@ -132,18 +132,18 @@ class Shopai():
     # KeyError at class construction - so their task configs carry no `agent:`.
     # ==================================================================
 
-    def recommendation_master_agent(self, run_id: str = "") -> Agent:
+    def recommendation_master_agent(self) -> Agent:
         """Manager of the recommendation crew - delegates, never executes.
 
-        With a run_id it also carries the task ledger, so it can plan the steps
-        it is delegating and track what came back. Without one it gets no
-        ledger rather than a shared global one - two runs writing to the same
-        ledger would be worse than no ledger at all.
+        Carries no tools of its own. CrewAI refuses a `manager_agent` that has
+        any, because it reserves the manager's toolset for the delegation tools
+        it injects. The ledger reaches it on the task instead - see
+        `recommendation_crew`.
         """
         return Agent(
             llm=default_llm(),
             config=self.agents_config['recommendation_master_agent'],  # type: ignore[index]
-            tools=task_ledger_tools(run_id) if run_id else [],
+            tools=[],
             allow_delegation=True,
             verbose=True,
         )
@@ -160,7 +160,11 @@ class Shopai():
     def recommendation_crew(self, run_id: str = "") -> Crew:
         """Hierarchical crew: the master routes work to the specialists.
 
-        CrewAI requires the manager to sit outside the agents list.
+        CrewAI requires the manager to sit outside the agents list, and refuses
+        a manager carrying tools. The ledger therefore rides on the master's
+        task rather than on the master: at execution time CrewAI resolves
+        `task.tools or agent.tools` and then merges the delegation tools into
+        whatever that produced, so the master ends up holding both.
         """
         return Crew(
             agents=[
@@ -169,11 +173,14 @@ class Shopai():
                 self.visualize_agent(),
             ],
             tasks=[
-                Task(config=self.tasks_config['master_recommendation_task']),  # type: ignore[index]
+                Task(
+                    config=self.tasks_config['master_recommendation_task'],  # type: ignore[index]
+                    tools=task_ledger_tools(run_id) if run_id else [],
+                ),
                 Task(config=self.tasks_config['review_recommendation_task']),  # type: ignore[index]
             ],
             process=Process.hierarchical,
-            manager_agent=self.recommendation_master_agent(run_id),
+            manager_agent=self.recommendation_master_agent(),
             verbose=True,
         )
 
@@ -216,6 +223,10 @@ class Shopai():
             "height": profile.get("height") or "5'6\"",
             "body_type": profile.get("bodyType") or "average",
             "style": ", ".join(styles) or "casual",
+            # The master sees which run it is on. Its ledger tools are already
+            # bound to this id and take no run_id argument, so this is for the
+            # agent's own reference - it cannot be used to write elsewhere.
+            "run_id": run_id,
         }
 
         raw = str(self.recommendation_crew(run_id).kickoff(inputs=inputs))
