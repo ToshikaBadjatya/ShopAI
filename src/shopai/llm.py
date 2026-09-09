@@ -29,3 +29,22 @@ def default_llm() -> LLM:
         base_url=os.environ.get("LLM_BASE_URL", DEFAULT_BASE_URL),
         api_key=os.environ.get("LLM_API_KEY", ""),
     )
+
+
+# Context windows for models we might be pointed at. Anything absent falls
+# through to the default below, which is what happens in practice: MODEL is
+# "auto" here, so a gateway chooses per call and we cannot know the window.
+MODEL_TOKEN_LIMITS = {
+    "gpt-4o": 128000,
+    "gpt-4o-mini": 128000,
+}
+
+DEFAULT_TOKEN_LIMIT = 128000
+
+
+def calculate_context_usage(context: str, model: str = "gpt-5-mini") -> dict:
+    """Calculate context window usage as percentage."""
+    estimated_tokens = len(context) // 4  # ~4 chars per token
+    max_tokens = MODEL_TOKEN_LIMITS.get(model, DEFAULT_TOKEN_LIMIT)
+    percentage = (estimated_tokens / max_tokens) * 100
+    return {"tokens": estimated_tokens, "max": max_tokens, "percent": round(percentage, 1)}
