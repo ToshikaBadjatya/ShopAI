@@ -15,7 +15,7 @@ from typing import Any, Optional, Union
 from mem0 import MemoryClient
 from supabase import Client, create_client
 
-from shopai.llm import default_llm
+from shopai.llm import calculate_context_usage, default_llm
 from shopai.memory.base import Memory
 from shopai.memory.user_memory import user_id_from_token
 
@@ -24,6 +24,11 @@ Messages = Union[str, Message, list[Message]]
 
 # How many of the most recent memories compact() leaves untouched.
 DEFAULT_KEEP_RECENT = 6
+
+# Compact once the conversation fills this share of the model's context window.
+# A percentage rather than a token count because MODEL is "auto" here - a
+# gateway picks per call, so any hand-tuned token figure would be guesswork.
+MAX_CONVERSATION_CONTEXT = 80
 
 CONVERSATION_TABLE = "conversation"
 
@@ -165,25 +170,36 @@ class ConversationMemory(Memory):
     def compact(self, user_id: str, run_id: str, keep_recent: int = DEFAULT_KEEP_RECENT) -> dict:
         """Fold older memories into one dense summary, keep the rest as-is.
 
+        Fires when the conversation fills MAX_CONVERSATION_CONTEXT percent of
+        the model's context window - not at a fixed number of turns, since what
+        matters is how much room is left, not how many times someone spoke.
+
         The most recent `keep_recent` memories are left untouched - they are
         cheap and still likely relevant. Everything older is condensed into a
         single memory tagged `compacted: true` and the originals it replaced
         are deleted, the same trade a long-running chat makes: older detail
         for a cheaper, still-useful context.
-
-        A conversation with `keep_recent` memories or fewer already has
-        nothing worth compacting and is returned unchanged.
         """
         detail = self.expand_conversation(user_id, run_id)
         memories = detail["memories"]
 
-        if len(memories) <= keep_recent:
+        # Measured over the memories, not the SQL turns: compaction shrinks
+        # this set and never deletes a transcript row, so measuring the
+        # transcript would climb forever and re-fire on every turn.
+        joined = "\n".join(m.get("memory", m.get("text", "")) for m in memories)
+        usage = calculate_context_usage(joined)
+
+        if usage["percent"] < MAX_CONVERSATION_CONTEXT or len(memories) <= keep_recent:
             return {
                 "run_id": run_id,
                 "user_id": user_id,
                 "compacted": False,
-                "reason": "Nothing old enough to compact.",
+                "reason": (
+                    f"Context usage {usage['percent']}% is below the "
+                    f"{MAX_CONVERSATION_CONTEXT}% threshold."
+                ),
                 "memory_count": len(memories),
+                "context_percent": usage["percent"],
             }
 
         to_fold, to_keep = memories[:-keep_recent], memories[-keep_recent:]
@@ -213,6 +229,7 @@ class ConversationMemory(Memory):
             "run_id": run_id,
             "user_id": user_id,
             "compacted": True,
+            "context_percent": usage["percent"],
             "folded_count": len(to_fold),
             "kept_count": len(to_keep),
             "summary": condensed_text,
