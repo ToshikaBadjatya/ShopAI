@@ -29,7 +29,6 @@ from shopai.tools.task_ledger_tools import (
 )
 from shopai.tools.validation_tools import (
     InappropriateFlagTool,
-    IncompleteContextTool,
     IntentValidatorTool,
     RelevanceFinderTool,
 )
@@ -112,10 +111,6 @@ TOOL_REGISTRY: list[Tool] = [
     _entry(
         InappropriateFlagTool,
         "Checking a request for inappropriate content that should be rejected.",
-    ),
-    _entry(
-        IncompleteContextTool,
-        "Checking whether a request is missing context needed to act on it.",
     ),
 ]
 

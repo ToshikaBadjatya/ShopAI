@@ -37,17 +37,6 @@ DISALLOWED_PATTERNS = [
     (r"\bkill\b|\bharm (myself|yourself)\b|\bsuicide\b", "harm"),
 ]
 
-# What a plan needs before it is worth running the crew.
-CONTEXT_SLOTS = {
-    "occasion": OCCASION_TERMS,
-    "garment": FASHION_TERMS,
-    "color": COLOR_TERMS,
-    "silhouette": SILHOUETTE_TERMS,
-    "budget": {"budget", "under", "cheap", "affordable", "premium", "rupees", "inr", "rs", "price"},
-    "timing": {"today", "tonight", "tomorrow", "weekend", "friday", "saturday", "sunday",
-               "monday", "tuesday", "wednesday", "thursday", "morning", "evening", "night"},
-}
-
 
 def _words(text: str) -> set[str]:
     return set(re.findall(r"[a-z][a-z'-]*", text.lower()))
@@ -149,38 +138,6 @@ class InappropriateFlagTool(BaseTool):
         })
 
 
-class IncompleteContextTool(BaseTool):
-    name: str = "incomplete_context"
-    description: str = (
-        "Reports which planning details the request is missing - occasion, garment, "
-        "budget, timing - and suggests the single most useful follow-up question. "
-        "Use it to decide whether to ask one question before planning."
-    )
-    args_schema: Type[BaseModel] = RequestInput
-
-    def _run(self, request: str) -> str:
-        present = {slot: _hits(request, vocab) for slot, vocab in CONTEXT_SLOTS.items()}
-        missing = [slot for slot, hits in present.items() if not hits]
-
-        questions = {
-            "occasion": "What's the occasion?",
-            "garment": "What kind of pieces are you after?",
-            "color": "Any colours you want to lean into?",
-            "silhouette": "What kind of fit or shape are you after?",
-            "budget": "Roughly what budget are you working with?",
-            "timing": "When do you need it for?",
-        }
-        # Occasion and garment are what planning actually needs; the rest are nice to have.
-        blocking = [slot for slot in ("garment", "occasion") if slot in missing]
-
-        return json.dumps({
-            "present": {slot: hits for slot, hits in present.items() if hits},
-            "missing": missing,
-            "sufficient": not blocking,
-            "suggested_question": questions[blocking[0]] if blocking else "",
-        })
-
-
 # ---------------------------------------------------------------------------
 # Registry - lets checks be added at runtime
 # ---------------------------------------------------------------------------
@@ -189,7 +146,6 @@ _DEFAULT_TOOLS: list[BaseTool] = [
     IntentValidatorTool(),
     RelevanceFinderTool(),
     InappropriateFlagTool(),
-    IncompleteContextTool(),
 ]
 
 _EXTRA_TOOLS: list[BaseTool] = []

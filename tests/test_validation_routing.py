@@ -8,11 +8,14 @@ def test_vague_but_safe_request_now_passes():
     assert result["rejection"] == ""
 
 
-def test_incomplete_context_finding_is_still_reported():
-    """Removed as a rejection, kept as evidence."""
+def test_incomplete_context_tool_is_removed():
+    """It was a second, unused incompleteness heuristic once clarity.py
+    started driving routing - findings should no longer carry its verdict."""
     result = validate_request("help me with my style")
-    assert "incomplete_context" in result["findings"]
-    assert result["findings"]["incomplete_context"]["sufficient"] is False
+    assert "incomplete_context" not in result["findings"]
+    assert set(result["findings"]) == {
+        "intent_validator", "relevance_finder", "flag_inappropriate",
+    }
 
 
 def test_unsafe_request_is_still_refused():
