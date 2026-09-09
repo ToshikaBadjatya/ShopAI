@@ -6,7 +6,9 @@ from crewai import Agent, Crew, Process, Task
 from crewai.project import CrewBase, agent, crew, task
 from crewai.agents.agent_builder.base_agent import BaseAgent
 
+from shopai.clarity import score_request
 from shopai.llm import default_llm
+from shopai.memory import memory
 from shopai.prompts import (
     PLANNING_PROMPT_TEMPLATE,
     PLANNING_SYSTEM_TEMPLATE,
@@ -215,21 +217,34 @@ class Shopai():
         return validate_request(prompt)
 
     def run_master_recommendation(
-        self, prompt: str, profile: dict | None = None, run_id: str | None = None
+        self, prompt: str, profile: dict | None = None, run_id: str | None = None,
+        access_token: str = "",
     ) -> dict:
         """Hand a request to the Recommendation Master crew.
 
-        The master reads the request and decides which specialists run - the
-        API does not route by intent any more. It plans those steps into the
-        task ledger under `run_id`, which is returned so a caller can read the
-        ledger back with `memory.task.get_status(run_id)`.
+        The request is scored for clarity first, and the tier goes into the
+        crew's inputs - the master routes on it: high runs the plan workflow,
+        medium and low go to the clarification agent.
+
+        Scoring reads the run's accumulated user turns rather than this one
+        message, which is how a vague request climbs low -> medium -> high as
+        the user answers.
 
         Returns:
-            {"recommendations": [...], "summary": "...", "raw": "...", "run_id": "..."}
+            {"recommendations": [...], "summary": "...", "raw": "...",
+             "run_id": "...", "clarity": {...}}
         """
         run_id = run_id or str(uuid.uuid4())
         profile = profile or {}
         styles = profile.get("styles") or []
+
+        scored_text = prompt
+        if access_token:
+            scored_text = memory.conversation.user_text(
+                run_id, access_token=access_token
+            ) or prompt
+        clarity = score_request(scored_text)
+
         inputs = {
             "shopping_request": prompt,
             "location": "India",
@@ -242,10 +257,17 @@ class Shopai():
             # bound to this id and take no run_id argument, so this is for the
             # agent's own reference - it cannot be used to write elsewhere.
             "run_id": run_id,
+            "clarity_tier": clarity["tier"],
+            "clarity_present": ", ".join(clarity["present"]) or "none",
+            "clarity_missing": ", ".join(clarity["missing"]) or "none",
         }
 
         raw = str(self.recommendation_crew(run_id).kickoff(inputs=inputs))
-        return {**self._parse_recommendation_crew_output(raw), "run_id": run_id}
+        return {
+            **self._parse_recommendation_crew_output(raw),
+            "run_id": run_id,
+            "clarity": clarity,
+        }
 
     def _parse_recommendation_crew_output(self, raw: str) -> dict:
         """The manager writes prose as often as JSON - keep whichever we get."""
