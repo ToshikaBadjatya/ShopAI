@@ -44,3 +44,13 @@ def test_a_full_request_scores_the_maximum():
     )
     assert result["score"] == 7
     assert result["missing"] == []
+
+
+def test_a_vibe_with_no_named_event_still_counts_as_an_occasion():
+    """Regression: 'plan an outfit . Vibe: Corporate Chic' scored 0 (Low) and
+    got routed as if there were no request at all, because the event
+    dimension checked EVENT_TERMS only - vibes like 'corporate' and 'chic'
+    live in a separate set and were invisible to it."""
+    result = score_request("plan an outfit . Vibe: Corporate Chic")
+    assert "event" in result["present"]
+    assert result["tier"] != "low"

@@ -10,7 +10,9 @@ data class UserProfile(
 data class OutfitPlanRequest(
     val prompt: String,
     /** Identifies the shopper to the backend; nothing verifies it yet. */
-    val userToken: String? = null
+    val userToken: String? = null,
+    /** Continues an existing run; omitted, the backend starts a new one. */
+    val runId: String? = null
 )
 
 data class ProductData(
@@ -30,11 +32,6 @@ data class OutfitPlanResponse(
     val products: List<ProductData> = emptyList()
 )
 
-/** Asks the backend to drop whatever task ledger it is holding for this user. */
-data class ClearTaskRequest(
-    val userToken: String? = null
-)
-
 /**
  * One shape for every plan outcome. [kind] says what the body holds:
  * `plan` (outfits populated), `message`, `permission`, or `error`.
@@ -43,5 +40,6 @@ data class PlanResponse(
     val kind: String = "plan",
     val message: String = "",
     val outfits: List<OutfitPlanResponse> = emptyList(),
+    val runId: String = "",
     val errorKind: String = "system_down"
 )

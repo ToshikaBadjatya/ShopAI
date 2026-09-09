@@ -142,7 +142,8 @@ fun NavGraph(
                 selectedOptionIds = selectedOptionIds,
                 onOptionSelected = { _, optionId -> chatViewModel.selectOption(optionId) },
                 onBack = { navController.popBackStack() },
-                onSendMessage = { message -> chatViewModel.planOutfit(moodText = message) }
+                onSendMessage = { message -> chatViewModel.planOutfit(moodText = message) },
+                onLeave = { chatViewModel.clearCurrentTask() }
             )
         }
 

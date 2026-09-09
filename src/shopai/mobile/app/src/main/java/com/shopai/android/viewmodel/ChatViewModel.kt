@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.shopai.android.data.api.RetrofitClient
 import com.shopai.android.data.model.ChatItem
 import com.shopai.android.data.model.ErrorKind
-import com.shopai.android.data.model.ClearTaskRequest
 import com.shopai.android.data.model.OutfitPlanRequest
 import com.shopai.android.data.model.OutfitPlanResponse
 import com.shopai.android.data.model.PlanResponse
@@ -35,6 +34,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     /** Results of the last successful plan. Deliberately kept out of the transcript. */
     private val _planIdeas = MutableStateFlow<List<OutfitPlanResponse>>(emptyList())
     val planIdeas: StateFlow<List<OutfitPlanResponse>> = _planIdeas.asStateFlow()
+
+    /**
+     * The run this conversation is on. Not UI state - nothing renders it - so a
+     * plain var rather than a StateFlow. Set once per conversation in
+     * [startNewConversation] and sent with every plan call after that, which is
+     * what lets a vague request climb clarity tiers across turns instead of each
+     * message starting a fresh run on the server.
+     */
+    private var currentRunId: String? = null
 
     // ---------------------------------------------------------------- transcript
 
@@ -73,10 +81,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
      * Start a fresh conversation from a new request.
      *
      * A request arriving from the mood screen begins a new line of work, so the
-     * previous transcript goes and the backend is told to drop the task ledger
-     * it was holding. The clear call is best-effort: the local chat is cleared
-     * either way, since refusing to start a new conversation because a cleanup
-     * call failed would be the worse outcome.
+     * previous transcript goes and a fresh run id is minted - every plan call
+     * this conversation makes from here on carries it, which is what lets the
+     * server treat a follow-up message as the same run rather than a new one.
+     *
+     * Clearing the *previous* run's task ledger is not this function's job -
+     * that happens when the chat screen for that run is left, not when a new
+     * one starts. See [clearCurrentTask].
      */
     fun startNewConversation(
         moodText: String,
@@ -84,18 +95,26 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         occasional: Boolean = false
     ) {
         clear()
-        clearTaskOnServer()
+        currentRunId = newId()
         planOutfit(moodText = moodText, vibes = vibes, occasional = occasional)
     }
 
-    private fun clearTaskOnServer() {
-        val token = Session.getAuth(getApplication()).accessToken.ifBlank { null }
+    /**
+     * Drop the server's task ledger for the run this conversation is on.
+     *
+     * Called when the chat screen is left, not when a new conversation starts -
+     * the ledger is scaffolding for one run, worthless once that run's screen is
+     * gone. Best-effort: a failed cleanup must not block navigation, since the
+     * user is already leaving.
+     */
+    fun clearCurrentTask() {
+        val runId = currentRunId ?: return
+        currentRunId = null
         viewModelScope.launch {
             try {
-                RetrofitClient.apiService.clearTask(ClearTaskRequest(userToken = token))
+                RetrofitClient.apiService.clearTask(runId)
             } catch (e: Exception) {
-                // The endpoint is not built yet, and a failed cleanup must not
-                // stop a new conversation - the local transcript is already gone.
+                // Best-effort - see the doc comment above.
             }
         }
     }
@@ -163,7 +182,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val request = OutfitPlanRequest(
                     prompt = prompt,
-                    userToken = Session.getAuth(getApplication()).accessToken.ifBlank { null }
+                    userToken = Session.getAuth(getApplication()).accessToken.ifBlank { null },
+                    runId = currentRunId
                 )
                 val response = if (occasional) {
                     RetrofitClient.apiService.planOccasionalOutfit(request)

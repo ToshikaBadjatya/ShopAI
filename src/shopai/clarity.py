@@ -14,13 +14,18 @@ import re
 from shopai.vocabulary import (
     ACCESSORY_TERMS,
     COLOR_TERMS,
-    EVENT_TERMS,
     GARMENT_TERMS,
+    OCCASION_TERMS,
     SILHOUETTE_TERMS,
 )
 
 DIMENSION_TERMS = {
-    "event": EVENT_TERMS,
+    # OCCASION_TERMS, not EVENT_TERMS: vocabulary.py already defines an
+    # occasion as "an event, or a vibe specific enough to dress for" (a
+    # wedding, or "corporate chic"). Using EVENT_TERMS alone made a vibe-only
+    # request invisible to this dimension - scored 0 and routed as if there
+    # were no request at all, when there plainly was one.
+    "event": OCCASION_TERMS,
     "outfit_type": GARMENT_TERMS,
     "colors": COLOR_TERMS,
     "silhouette": SILHOUETTE_TERMS,

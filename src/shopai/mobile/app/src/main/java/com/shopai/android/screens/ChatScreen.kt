@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -75,7 +76,9 @@ fun ChatScreen(
     onQuickReply: (itemId: String, reply: String) -> Unit = { _, _ -> },
     onPermissionAllow: (itemId: String) -> Unit = {},
     onPermissionDeny: (itemId: String) -> Unit = {},
-    onPermissionDetails: (itemId: String) -> Unit = {}
+    onPermissionDetails: (itemId: String) -> Unit = {},
+    /** Fired when this screen leaves composition - e.g. navigating back. */
+    onLeave: () -> Unit = {}
 ) {
     val listState = rememberLazyListState()
 
@@ -83,6 +86,10 @@ fun ChatScreen(
         if (items.isNotEmpty()) {
             listState.animateScrollToItem(items.lastIndex)
         }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { onLeave() }
     }
 
     Scaffold(
