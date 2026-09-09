@@ -25,6 +25,7 @@ from pydantic import BaseModel
 
 from shopai.crew import Shopai
 from shopai.memory import memory
+from shopai.memory.user_memory import user_id_from_token
 from shopai.telemetry import setup_telemetry
 
 setup_telemetry()
@@ -47,6 +48,7 @@ _plan_store: dict[str, dict] = {}
 class PlanRequest(BaseModel):
     prompt: str
     userToken: Optional[str] = None
+    runId: Optional[str] = None
 
 
 class ProductData(BaseModel):
@@ -79,6 +81,7 @@ class PlanResponse(BaseModel):
     kind: Literal["plan", "message", "permission", "error"] = "plan"
     message: str = ""
     outfits: List[OutfitPlanResponse] = []
+    runId: str = ""
     errorKind: Literal["out_of_scope", "not_allowed", "system_down", "clarification"] = (
         "system_down"
     )
@@ -167,35 +170,81 @@ async def _guard(prompt: str) -> tuple[dict, Optional[PlanResponse]]:
 # Endpoints
 # ---------------------------------------------------------------------------
 
-async def _plan(request: PlanRequest) -> PlanResponse:
-    """Guardrail, then hand the request to the Recommendation Master agent.
+def _compact_if_full(run_id: str, access_token: str) -> None:
+    """Fold the conversation down if it has filled the context window.
 
-    Both routes share this: the API does not decide what a request is beyond
-    pass/fail - the master reads it and picks the specialists.
+    compact() decides for itself whether the threshold has been crossed; this
+    only has to ask. Failures are swallowed on purpose - compaction is
+    housekeeping, and Mem0 raises outright when MEM0_API_KEY is unset, which
+    must not cost the user their answer.
     """
+    if not access_token:
+        return
+
+    user_id = user_id_from_token(access_token)
+    if not user_id:
+        return
+
+    try:
+        memory.conversation.compact(user_id, run_id)
+    except Exception:
+        pass
+
+
+async def _plan(request: PlanRequest) -> PlanResponse:
+    """One turn: record it, check it, score it, run it, record the reply.
+
+    A runId continues an existing run; without one a new run starts. That is
+    what lets a vague request climb tiers - scoring reads every user turn in
+    the run, not just this message.
+    """
+    token = request.userToken or ""
+    run_id = request.runId or str(uuid.uuid4())
+
+    if token:
+        memory.conversation.append(run_id, "user", request.prompt, access_token=token)
+
     verdict, rejection = await _guard(request.prompt)
     if rejection is not None:
+        rejection.runId = run_id
         return rejection
 
     loop = asyncio.get_event_loop()
     try:
         result = await loop.run_in_executor(
-            None, lambda: Shopai().run_master_recommendation(request.prompt, {})
+            None,
+            lambda: Shopai().run_master_recommendation(
+                request.prompt, {}, run_id=run_id, access_token=token
+            ),
         )
     except Exception as exc:
-        return _failure(f"Recommendation master failed: {exc}")
+        failure = _failure(f"Recommendation master failed: {exc}")
+        failure.runId = run_id
+        return failure
 
-    plan_id = str(uuid.uuid4())
-    _plan_store[plan_id] = {
+    # The master is authoritative on which run it acted under - it always
+    # echoes back what it was given, but treat that as the source of truth
+    # rather than assuming the two can never diverge.
+    run_id = result.get("run_id", run_id)
+
+    _plan_store[run_id] = {
         "recommendation": result,
         "inputs": {"shopping_request": request.prompt},
         "userToken": request.userToken,
         "validation": verdict,
     }
-    return _plan_result(
-        _recommendation_to_outfits(plan_id, result),
+
+    response = _plan_result(
+        _recommendation_to_outfits(run_id, result),
         summary=result.get("summary", ""),
     )
+    response.runId = run_id
+
+    if token and response.message:
+        memory.conversation.append(run_id, "agent", response.message, access_token=token)
+
+    _compact_if_full(run_id, token)
+    return response
 
 
 @app.post("/outfit/plan/regular", response_model=PlanResponse)
