@@ -20,12 +20,24 @@ def _gateway_model(model: str) -> str:
 
 @lru_cache(maxsize=1)
 def default_llm() -> LLM:
-    """The LLM every agent uses. Cached so one client is shared per process."""
+    """The LLM every agent uses unless it asks for its own. Cached so one
+    client is shared per process."""
+    return llm_for(os.environ.get("MODEL", DEFAULT_MODEL))
+
+
+@lru_cache(maxsize=8)
+def llm_for(model: str) -> LLM:
+    """An LLM pinned to one gateway model, for an agent whose work suits a
+    different one than the crew's default.
+
+    Cached per model id, so two agents naming the same model share a client
+    rather than opening one each.
+    """
     return LLM(
         # provider pins the OpenAI-compatible client, so any gateway model id works
         # without CrewAI trying to resolve it against its own provider registry.
         provider="openai",
-        model=_gateway_model(os.environ.get("MODEL", DEFAULT_MODEL)),
+        model=_gateway_model(model),
         base_url=os.environ.get("LLM_BASE_URL", DEFAULT_BASE_URL),
         api_key=os.environ.get("LLM_API_KEY", ""),
     )

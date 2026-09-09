@@ -7,7 +7,7 @@ from crewai.project import CrewBase, agent, crew, task
 from crewai.agents.agent_builder.base_agent import BaseAgent
 
 from shopai.clarity import score_request
-from shopai.llm import default_llm
+from shopai.llm import default_llm, llm_for
 from shopai.memory import memory
 from shopai.prompts import (
     PLANNING_PROMPT_TEMPLATE,
@@ -17,11 +17,24 @@ from shopai.prompts import (
     VISUALIZE_SYSTEM_TEMPLATE,
     VISUALIZE_PROMPT_TEMPLATE,
 )
+from shopai.tools.clarification_tools import FindMissingSegmentsTool
 from shopai.tools.outfit_scraper_tool import OutfitScraperTool
 from shopai.tools.task_ledger_tools import task_ledger_tools
 from shopai.tools.validation_tools import validate_request
 from shopai.tools.outfit_visualization_tool import OutfitVisualizationTool
 from shopai.tools.weather_tool import WeatherByLocationTool
+
+
+# The clarifier turns one named gap into one question - small, bounded work
+# that would suit a smaller model than the rest of the crew needs.
+#
+# Empty for now, meaning it shares the crew's default. The gateway this
+# project points at only has usable provider keys behind its own "auto"
+# routing: naming a model directly - gemma-4-31b-it, qwen3-8b, gpt-5-mini,
+# any of them - returns "no candidate model has a configured, usable provider
+# key" or an exhausted quota. Set this to a model id once the gateway can
+# serve one, and llm_for() will pin it.
+
 
 
 @CrewBase
@@ -162,13 +175,17 @@ class Shopai():
     def clarification_agent(self) -> Agent:
         """Asks the user for what is missing - Medium and Low both land here.
 
+        Carries find_missing_segments directly. Unlike the master, it is not
+        a manager, so CrewAI does not refuse it tools - no ledger-style
+        task.tools workaround needed here.
+
         No delegation: it has no one to hand work to, and a clarifier that
         delegates would be answering its own question.
         """
         return Agent(
-            llm=default_llm(),
+            llm=llm_for(CLARIFICATION_MODEL) if CLARIFICATION_MODEL else default_llm(),
             config=self.agents_config['clarification_agent'],  # type: ignore[index]
-            tools=[],
+            tools=[FindMissingSegmentsTool()],
             allow_delegation=False,
             verbose=True,
         )
@@ -238,6 +255,10 @@ class Shopai():
         profile = profile or {}
         styles = profile.get("styles") or []
 
+        # Written before the read below, not after: scoring must see this
+        # message, not just the run's earlier turns.
+        self._append_turn(run_id, "user", prompt, access_token)
+
         scored_text = prompt
         if access_token:
             try:
@@ -265,17 +286,40 @@ class Shopai():
             # bound to this id and take no run_id argument, so this is for the
             # agent's own reference - it cannot be used to write elsewhere.
             "run_id": run_id,
+            # What the clarification agent's tool checks - the run's
+            # accumulated turns, not just this message.
+            "conversation_text": scored_text,
             "clarity_tier": clarity["tier"],
             "clarity_present": ", ".join(clarity["present"]) or "none",
             "clarity_missing": ", ".join(clarity["missing"]) or "none",
         }
 
         raw = str(self.recommendation_crew(run_id).kickoff(inputs=inputs))
-        return {
-            **self._parse_recommendation_crew_output(raw),
-            "run_id": run_id,
-            "clarity": clarity,
-        }
+        parsed = self._parse_recommendation_crew_output(raw)
+
+        # Only carries text when there is text to carry: a real plan's summary
+        # is always blank (see _parse_recommendation_crew_output), so nothing
+        # gets written for it - there was never a client-facing message to
+        # record in that case either.
+        self._append_turn(run_id, "agent", parsed.get("summary", ""), access_token)
+
+        return {**parsed, "run_id": run_id, "clarity": clarity}
+
+    def _append_turn(self, run_id: str, sender: str, message: str, access_token: str) -> None:
+        """Record one turn in the run's transcript. Best-effort.
+
+        A Supabase access token is short-lived (~1h) and not every caller
+        refreshes it yet, so a write failure here is routine, not exceptional -
+        it must never cost the caller their plan. Recording the transcript is
+        infrastructure for scoring and history, not the thing that was asked for.
+        """
+        if not access_token or not message:
+            return
+
+        try:
+            memory.conversation.append(run_id, sender, message, access_token=access_token)
+        except Exception:
+            pass
 
     def _parse_recommendation_crew_output(self, raw: str) -> dict:
         """The manager writes prose as often as JSON - keep whichever we get."""

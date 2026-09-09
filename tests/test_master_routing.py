@@ -46,6 +46,17 @@ def test_scoring_reads_the_accumulated_run_text_not_just_this_turn():
     assert result["clarity"]["tier"] == "high"
 
 
+def test_conversation_text_reaches_the_crew_inputs():
+    """The master's task needs the accumulated text to hand to the
+    clarification agent's tool via delegation - not just this turn's prompt."""
+    _, crew = _run(
+        "something in navy",
+        user_text="wedding guest dress\nsomething in navy",
+    )
+    inputs = crew.kickoff.call_args.kwargs["inputs"]
+    assert inputs["conversation_text"] == "wedding guest dress\nsomething in navy"
+
+
 def test_run_id_still_reaches_the_crew_inputs():
     """Regression guard: a fix that landed before this task added run_id to
     the inputs so the master can name which run it is on. Scoring must not
@@ -53,6 +64,107 @@ def test_run_id_still_reaches_the_crew_inputs():
     _, crew = _run("wedding guest dress")
     inputs = crew.kickoff.call_args.kwargs["inputs"]
     assert inputs["run_id"]
+
+
+def test_writes_the_user_turn_to_the_transcript():
+    crew = MagicMock()
+    crew.kickoff.return_value = "{}"
+    shopai = Shopai()
+    with patch.object(shopai, "recommendation_crew", return_value=crew), \
+         patch("shopai.crew.memory") as mem:
+        mem.conversation.user_text.return_value = "wedding guest dress"
+        shopai.run_master_recommendation(
+            "wedding guest dress", {}, run_id="run-1", access_token="tok"
+        )
+
+    mem.conversation.append.assert_any_call("run-1", "user", "wedding guest dress", access_token="tok")
+
+
+def test_the_user_turn_is_written_before_scoring_reads_it():
+    """Scoring must see this message, not just prior turns - the write has to
+    happen before the read that feeds score_request()."""
+    crew = MagicMock()
+    crew.kickoff.return_value = "{}"
+    shopai = Shopai()
+    call_order = []
+    with patch.object(shopai, "recommendation_crew", return_value=crew), \
+         patch("shopai.crew.memory") as mem:
+        mem.conversation.append.side_effect = lambda *a, **k: call_order.append("append")
+        mem.conversation.user_text.side_effect = (
+            lambda *a, **k: call_order.append("user_text") or "wedding guest dress"
+        )
+        shopai.run_master_recommendation(
+            "wedding guest dress", {}, run_id="run-1", access_token="tok"
+        )
+
+    assert call_order[0] == "append"
+    assert "user_text" in call_order
+
+
+def test_writes_the_agent_summary_turn_after_the_crew_runs():
+    crew = MagicMock()
+    crew.kickoff.return_value = "not json, just a question for the user"
+    shopai = Shopai()
+    with patch.object(shopai, "recommendation_crew", return_value=crew), \
+         patch("shopai.crew.memory") as mem:
+        mem.conversation.user_text.return_value = "help me with my style"
+        shopai.run_master_recommendation(
+            "help me with my style", {}, run_id="run-1", access_token="tok"
+        )
+
+    mem.conversation.append.assert_any_call(
+        "run-1", "agent", "not json, just a question for the user", access_token="tok"
+    )
+
+
+def test_no_agent_turn_written_when_the_crew_returns_a_real_plan():
+    """A plan-kind response carries no summary text to record - matches the
+    old app.py guard of `if response.message`, which never fired for a real
+    plan (outfits populated means message is blank)."""
+    crew = MagicMock()
+    crew.kickoff.return_value = '{"recommendations": [{"outfit_name": "Look 1", "products": []}]}'
+    shopai = Shopai()
+    with patch.object(shopai, "recommendation_crew", return_value=crew), \
+         patch("shopai.crew.memory") as mem:
+        mem.conversation.user_text.return_value = (
+            "black fitted midi dress for a cocktail party with gold jewellery"
+        )
+        shopai.run_master_recommendation(
+            "black fitted midi dress for a cocktail party with gold jewellery",
+            {}, run_id="run-1", access_token="tok",
+        )
+
+    agent_calls = [c for c in mem.conversation.append.call_args_list if c.args[1] == "agent"]
+    assert agent_calls == []
+
+
+def test_transcript_writes_are_best_effort():
+    """A write failure (e.g. an expired token) must not fail the whole request -
+    conversation.append is infrastructure for scoring and history, not the
+    thing the caller asked for."""
+    crew = MagicMock()
+    crew.kickoff.return_value = "{}"
+    shopai = Shopai()
+    with patch.object(shopai, "recommendation_crew", return_value=crew), \
+         patch("shopai.crew.memory") as mem:
+        mem.conversation.append.side_effect = Exception("JWT expired")
+        mem.conversation.user_text.return_value = "help me with my style"
+        result = shopai.run_master_recommendation(
+            "help me with my style", {}, run_id="run-1", access_token="tok"
+        )
+
+    assert result["run_id"] == "run-1"
+
+
+def test_no_transcript_write_without_an_access_token():
+    crew = MagicMock()
+    crew.kickoff.return_value = "{}"
+    shopai = Shopai()
+    with patch.object(shopai, "recommendation_crew", return_value=crew), \
+         patch("shopai.crew.memory") as mem:
+        shopai.run_master_recommendation("help me with my style", {}, run_id="run-1")
+
+    mem.conversation.append.assert_not_called()
 
 
 def test_a_transcript_read_failure_falls_back_to_this_message_alone():

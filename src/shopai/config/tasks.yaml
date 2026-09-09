@@ -70,17 +70,31 @@ master_recommendation_task:
 
     - high: run the plan workflow. Delegate curation to the recommendation
       specialist, then critique to the reviewer, then imagery to the visualizer.
-    - medium: delegate to the Styling Clarifier and tell it the tier is medium
-      and which dimensions are missing. Do not curate anything yet.
-    - low: delegate to the Styling Clarifier and tell it the tier is low. There
-      is no real request yet - it must not be asked about an outfit.
+    - medium: delegate to the Styling Clarifier. Give it the full conversation
+      so far - {conversation_text} - and tell it the tier is medium with these
+      dimensions missing: {clarity_missing}.
+    - low: delegate to the Styling Clarifier the same way, but tell it the tier
+      is low - there is no real request yet, it must not be asked about an
+      outfit.
+
+    Either way, the Styling Clarifier answers with exactly one of two shapes:
+
+    - "READY: <request>" - it found enough. Treat the text after "READY: " as
+      the finished request and continue exactly as the high path does: curate,
+      review, visualize, in this same turn. Do not ask the user anything.
+    - "ASK: <question>" - still missing something. Return that question as your
+      final answer, verbatim. Do not curate anything yet.
 
     Never fill in a missing dimension yourself to promote a request to a higher
     tier. A guess recorded as fact is the one failure this routing cannot
-    recover from.
+    recover from - that is exactly what the Styling Clarifier's tool exists to
+    prevent you from needing to do.
   expected_output: >
-    A JSON object with a "recommendations" array. Each entry has outfit_name and
-    a products array of {product_name, product_price, product_url}.
+    Either a JSON object with a "recommendations" array (each entry has
+    outfit_name and a products array of {product_name, product_price,
+    product_url}), when the plan workflow ran - or a single plain-language
+    question, verbatim from the Styling Clarifier's "ASK:" answer, when one
+    more turn is needed.
 
 review_recommendation_task:
   description: >

@@ -65,25 +65,6 @@ def test_a_continued_run_reuses_the_supplied_run_id():
     assert passed.kwargs["run_id"] == "run-1"
 
 
-def test_both_turns_are_appended_to_the_transcript():
-    with patch("shopai.api.app.Shopai") as shopai, \
-         patch("shopai.api.app.memory") as mem:
-        shopai.return_value.run_validation.return_value = {
-            "allowed": True, "rejection": "", "message": "", "findings": {}
-        }
-        shopai.return_value.run_master_recommendation.return_value = {
-            "recommendations": [], "summary": "What's the occasion?",
-            "raw": "", "run_id": "run-1", "clarity": {"tier": "low"},
-        }
-        client.post(
-            "/outfit/plan/regular",
-            json={"prompt": "help me with my style", "userToken": "tok"},
-        )
-
-    senders = [c.args[1] for c in mem.conversation.append.call_args_list]
-    assert senders == ["user", "agent"]
-
-
 def test_compaction_is_attempted_after_the_turn():
     with patch("shopai.api.app.Shopai") as shopai, \
          patch("shopai.api.app.memory") as mem, \
