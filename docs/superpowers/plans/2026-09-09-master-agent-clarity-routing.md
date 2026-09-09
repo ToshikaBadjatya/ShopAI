@@ -1127,6 +1127,8 @@ git commit -m "feat: add clarification agent serving both medium and low tiers"
 - Consumes: `score_request` (Task 2), `ConversationMemory.user_text` (Task 5), `clarification_agent` (Task 7).
 - Produces: `Shopai.run_master_recommendation(prompt, profile=None, run_id=None, access_token="")` returns its existing dict plus `"clarity": {...}` — the full score dict from Task 2.
 
+**Reconciliation note:** `run_master_recommendation` and `master_recommendation_task` already carry a `run_id` addition from a fix that landed between planning and execution — the master already sees `{run_id}` in its prompt so it can name which run it is on (its ledger tools take no run id; they're bound to one at build time). Step 3 and Step 4 below preserve that addition rather than reintroducing the pre-fix version — do not paste either block over what is currently in the file without checking the diff first.
+
 - [ ] **Step 1: Write the failing test**
 
 ```python
@@ -1233,6 +1235,10 @@ Change the signature and body of `run_master_recommendation`:
             "height": profile.get("height") or "5'6\"",
             "body_type": profile.get("bodyType") or "average",
             "style": ", ".join(styles) or "casual",
+            # The master sees which run it is on. Its ledger tools are already
+            # bound to this id and take no run_id argument, so this is for the
+            # agent's own reference - it cannot be used to write elsewhere.
+            "run_id": run_id,
             "clarity_tier": clarity["tier"],
             "clarity_present": ", ".join(clarity["present"]) or "none",
             "clarity_missing": ", ".join(clarity["missing"]) or "none",
@@ -1246,11 +1252,28 @@ Change the signature and body of `run_master_recommendation`:
         }
 ```
 
+The `run_id` key and its comment are not new — do not omit them. They came from the earlier fix; this step only adds the three `clarity_*` keys alongside them.
+
 - [ ] **Step 4: Tell the master what the tier means**
 
-In `src/shopai/config/tasks.yaml`, extend `master_recommendation_task`'s description with the routing rule. Append to the existing description text:
+`master_recommendation_task` in `src/shopai/config/tasks.yaml` already carries a
+paragraph from the earlier run-id fix ("You are working on run {run_id}...").
+Add the routing rule as a **new paragraph after it** — do not replace the
+block, or the run-id paragraph is lost. The full description should read:
 
 ```yaml
+master_recommendation_task:
+  description: >
+    Deliver reviewed outfit recommendations for {shopping_request}.
+    The user is {gender}, height {height}, body type {body_type}, style
+    preference {style}, shopping in {location} with a budget of {budget}.
+    Direct the specialists: have the recommendation specialist curate options,
+    have the reviewer judge them against fit, occasion and budget, and send work
+    back for another pass when the reviewer's objections are material.
+
+    You are working on run {run_id}. Your ledger tools already write to this
+    run - they take no run id, so plan and update steps without naming one.
+
     This request scored {clarity_tier} on clarity. Present: {clarity_present}.
     Missing: {clarity_missing}.
 
@@ -1266,6 +1289,9 @@ In `src/shopai/config/tasks.yaml`, extend `master_recommendation_task`'s descrip
     Never fill in a missing dimension yourself to promote a request to a higher
     tier. A guess recorded as fact is the one failure this routing cannot
     recover from.
+  expected_output: >
+    A JSON object with a "recommendations" array. Each entry has outfit_name and
+    a products array of {product_name, product_price, product_url}.
 ```
 
 - [ ] **Step 5: Run test to verify it passes**
