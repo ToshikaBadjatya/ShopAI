@@ -13,15 +13,21 @@ import os
 from typing import Any, Optional, Union
 
 from mem0 import MemoryClient
+from supabase import Client, create_client
 
 from shopai.llm import default_llm
 from shopai.memory.base import Memory
+from shopai.memory.user_memory import user_id_from_token
 
 Message = dict[str, str]
 Messages = Union[str, Message, list[Message]]
 
 # How many of the most recent memories compact() leaves untouched.
 DEFAULT_KEEP_RECENT = 6
+
+CONVERSATION_TABLE = "conversation"
+
+SENDERS = {"user", "agent"}
 
 
 def _client() -> MemoryClient:
@@ -37,6 +43,22 @@ def _scope(user_id: str, run_id: str) -> dict:
     if not user_id or not run_id:
         raise ValueError("Conversation memory needs both a user_id and a run_id.")
     return {"user_id": user_id, "run_id": run_id}
+
+
+def _supabase(access_token: str) -> Client:
+    """A client acting as the user - RLS decides what it can reach."""
+    url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    key = os.environ.get("SUPABASE_ANON_KEY", "")
+    if not url or not key:
+        raise RuntimeError(
+            "Supabase is not configured. Set SUPABASE_URL and SUPABASE_ANON_KEY."
+        )
+    if not access_token:
+        raise RuntimeError("An access token is required: conversations are per-user.")
+
+    client = create_client(url, key)
+    client.postgrest.auth(access_token)
+    return client
 
 
 class ConversationMemory(Memory):
@@ -196,3 +218,49 @@ class ConversationMemory(Memory):
             "summary": condensed_text,
             "added": added,
         }
+
+    # ------------------------------------------------------- the transcript
+    #
+    # Mem0 above holds the summary; these hold what was actually said. Scoring
+    # reads the turns rather than the summary, so compaction can never change
+    # a run's clarity score.
+
+    def append(self, run_id: str, sender: str, message: str, *, access_token: str) -> dict:
+        """Record one turn."""
+        if sender not in SENDERS:
+            raise ValueError(f"Unknown sender '{sender}'. Use one of: {', '.join(sorted(SENDERS))}.")
+
+        user_id = user_id_from_token(access_token)
+        result = (
+            _supabase(access_token)
+            .table(CONVERSATION_TABLE)
+            .insert({
+                "run_id": run_id,
+                "user_id": user_id,
+                "sender": sender,
+                "message": message,
+            })
+            .execute()
+        )
+        return result.data[0] if result.data else {}
+
+    def history(self, run_id: str, *, access_token: str) -> list[dict]:
+        """Every turn in this run, oldest first."""
+        result = (
+            _supabase(access_token)
+            .table(CONVERSATION_TABLE)
+            .select("*")
+            .eq("run_id", run_id)
+            .order("created_at")
+            .execute()
+        )
+        return result.data or []
+
+    def user_text(self, run_id: str, *, access_token: str) -> str:
+        """Every user turn joined - what clarity scoring reads.
+
+        The agent's own turns are excluded deliberately: a question listing
+        colour options would otherwise score as the user having named colours.
+        """
+        turns = self.history(run_id, access_token=access_token)
+        return "\n".join(t["message"] for t in turns if t.get("sender") == "user")
