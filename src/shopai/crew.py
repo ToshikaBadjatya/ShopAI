@@ -157,6 +157,20 @@ class Shopai():
             verbose=True,
         )
 
+    def clarification_agent(self) -> Agent:
+        """Asks the user for what is missing - Medium and Low both land here.
+
+        No delegation: it has no one to hand work to, and a clarifier that
+        delegates would be answering its own question.
+        """
+        return Agent(
+            llm=default_llm(),
+            config=self.agents_config['clarification_agent'],  # type: ignore[index]
+            tools=[],
+            allow_delegation=False,
+            verbose=True,
+        )
+
     def recommendation_crew(self, run_id: str = "") -> Crew:
         """Hierarchical crew: the master routes work to the specialists.
 
@@ -171,6 +185,7 @@ class Shopai():
                 self.recommendation_agent(),
                 self.review_recommendation_agent(),
                 self.visualize_agent(),
+                self.clarification_agent(),
             ],
             tasks=[
                 Task(

@@ -75,3 +75,20 @@ review_recommendation_task:
   expected_output: >
     A verdict of approved or needs_changes, followed by the specific objections
     and the substitution suggested for each.
+
+clarification_task:
+  description: >
+    The request "{shopping_request}" scored {clarity_tier} on clarity.
+    Dimensions present: {clarity_present}. Dimensions missing: {clarity_missing}.
+
+    If the tier is medium, narrow the request: ask about the single missing
+    dimension that would most change what you would recommend.
+
+    If the tier is low, there is not really a request yet. Do not ask about
+    the outfit. Find out how this person likes to dress instead.
+
+    Ask one question. Do not answer it yourself, and do not assume what they
+    would have said.
+  expected_output: >
+    A single question for the user, in plain language, with no preamble and no
+    list of options unless the options genuinely narrow the choice.
