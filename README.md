@@ -8,7 +8,7 @@ ShopAI helps users decide what to wear, discover the best products online, and v
 
 # Problem Statement
 
-**Core Problem:** Women often spend a lot of time and money on outfit decisions due to decision fatigue, unlimited market options, limited personalisation, regrettable purchases, and poor reusability — solved via smart recommendation, marketplace discovery, visualisation, and personalised styling.
+**Core Problem:** Women often spend a lot of time and money on outfit decisions due to decision fatigue, unlimited market options, limited personalisation, regrettable purchases, and poor reusability — solved via smart recommendations, marketplace discovery, visualisation, and personalised styling.
 
 Shopping for clothing is often fragmented and time-consuming. Users struggle with:
 
@@ -59,17 +59,15 @@ The platform combines:
 - Can be scheduled to proactively suggest an outfit from the wardrobe at set times each day
 - Bonus: visualization based on saved body parameters
 
-### 3. Marketplace Discovery (V2)
+### 3. Marketplace Discovery
 
 - If a recommended piece isn't in the user's wardrobe, offers to search the marketplace for it
 - Runs research against pricing constraints, evaluates options, and returns the top 5 links
 - Flags platforms with a high return-rate history before including them
 
-### Outfit Visualization
+### 4. Outfit Visualization
 
-- Select products for each outfit component
-- Generate an AI-rendered preview
-- Visualize how the final outfit may look based on body type
+- Visualize how a recommended outfit may look based on body type,  skin color etc
 
 ---
 
@@ -78,8 +76,7 @@ The platform combines:
 - Social shopping features
 - Community interactions
 - Voice-first experiences
-- Marketplace inventory synchronization
-- Direct checkout integrations
+- Direct marketplace checkout integrations
 
 ---
 
@@ -166,10 +163,12 @@ within a defined time window (1 hour).
 - Optimize cost by using specialized models
 - Improve reliability through deterministic workflows
 - Increase scalability through modular agents
+<img width="926" height="761" alt="Screenshot 2026-09-06 at 2 20 49 AM" src="https://github.com/user-attachments/assets/96361b8f-2614-4364-9688-03d94cd529d4" />
+
 
 ---
 
-# Agent Architecture
+# Agent Model Selection
 
 A Recommendation Master agent plans and delegates to specialist sub-agents, backed by a lightweight intent/guardrail check up front.
 
@@ -186,13 +185,6 @@ Color legend used in the system diagrams: **Blue** = workflows, **Yellow** = mas
 
 ---
 
-# High-Level Workflow
-
-<img width="1450" height="615" alt="Screenshot 2026-06-17 at 7 08 36 PM" src="https://github.com/user-attachments/assets/ca20bf5f-cb04-420c-ac5e-dc5b5d6eeeac" />
-
-
----
-
 # Technology Stack
 
 | Layer | Technology |
@@ -205,10 +197,6 @@ Color legend used in the system diagrams: **Blue** = workflows, **Yellow** = mas
 | Intent & Guardrails Model | Gemma 4 31B |
 | Image Generation | Google Nano Banana |
 
----
-
-# Video Link 
-https://drive.google.com/drive/folders/17XrJHqIj90X74EYwHycOArIu4pMYTrKx?usp=sharing
 
 ---
 
