@@ -8,16 +8,20 @@ ShopAI helps users decide what to wear, discover the best products online, and v
 
 # Problem Statement
 
-Shopping for clothing is often fragmented and time-consuming.
+**Core Problem:** Women often spend a lot of time and money on outfit decisions due to decision fatigue, unlimited market options, limited personalisation, regrettable purchases, and poor reusability — solved via smart recommendation, marketplace discovery, visualisation, and personalised styling.
 
-Users struggle with:
+Shopping for clothing is often fragmented and time-consuming. Users struggle with:
 
 - Deciding what to wear for a specific occasion
+- Remembering what they already own in their wardrobe
 - Searching across multiple marketplaces to find suitable products
 - Comparing alternatives fairly across price, reviews, and style
 - Understanding how an outfit will actually look on them before purchasing
 
 These challenges often lead to decision fatigue, poor purchase confidence, and higher return rates.
+
+**Goal:** Build an everyday-use AI assistant that reliably meets shopping requirements.
+**Future Goal:** Become a marketplace in its own right — place orders and track them.
 
 ---
 
@@ -39,24 +43,27 @@ The platform combines:
 
 # Key Features (V1)
 
-### Outfit Planning
+### 1. Occasion / Experimental Styling
 
-- Understands user intent from:
-  - Occasion
-  - Style preferences
-  - Body type
-- Generates Top 5 outfit recommendations
-- Allows users to explore additional outfit options
+- Deploys a recommendation engine that narrows choices based on occasion, mood, and personal preference
+- Asks clarifying questions (age, event, etc.) to confirm choices, pulling in weather and past purchase history as local factors
+- Shows the top 4 options and asks the user which one might work
+- On selection, offers a preview — an AI-rendered model recommendation of the outfit
+- If nothing works, asks for body-type details or an image to visualize the outfit on the user directly
+- Optionally rates the outfit or lets the user share it with a friend for feedback
 
-### Mix & Match Recommendations
+### 2. Daily Styling & Wardrobe Usability
 
-Users can start with selected clothing pieces and generate complementary outfit suggestions around them.
+- Lets the user build a wardrobe by photographing pieces they own; identifies each item and its core properties into a database
+- Learns daily outfit patterns — office, gym, family dinner — to build context on how the user likes to dress
+- Can be scheduled to proactively suggest an outfit from the wardrobe at set times each day
+- Bonus: visualization based on saved body parameters
 
-### Shopping Discovery
+### 3. Marketplace Discovery (V2)
 
-- Finds matching products across marketplaces
-- Provides direct purchase links
-- Supports platforms such as Myntra, Amazon, Meesho, and more
+- If a recommended piece isn't in the user's wardrobe, offers to search the marketplace for it
+- Runs research against pricing constraints, evaluates options, and returns the top 5 links
+- Flags platforms with a high return-rate history before including them
 
 ### Outfit Visualization
 
@@ -164,34 +171,18 @@ within a defined time window (1 hour).
 
 # Agent Architecture
 
-## 1. Planning Agent
+A Recommendation Master agent plans and delegates to specialist sub-agents, backed by a lightweight intent/guardrail check up front.
 
-**Responsibility:** Convert user intent into a structured outfit planning request.
+| Agent | Model | Speciality |
+|---|---|---|
+| Recommendation Master Agent | Gemini 2.5 Flash | Core planner agent — builds task and context description, routes to specialists |
+| Wardrobe Agent | Gemini 2.5 Flash | Manages the wardrobe and performs gap analysis |
+| Recommendation Agent | Gemini 2.5 Flash | Generates recommendations from context |
+| Recommendation Review Agent | GPT-OSS 120B (Groq) | Reviews recommendations against context |
+| Visualisation Agent | Nano Banana | Generates an image from the outfit description |
+| Intent Identification & Guardrails | Gemma 4 31B | Validates the request and clarifies user intent before it reaches the master agent |
 
-- Input: User Prompt (≤200 words), Preferences (≤500 words)
-- Input Tokens: ~1,300–1,600
-- Output: Structured JSON (~350 tokens)
-- Context Window: 4K
-- Latency: 2–5 sec
-- Models: GPT-4.1 Mini, Claude Sonnet 4
-
-## 2. Recommendation Agent
-
-**Responsibility:** Find the best outfit recommendations and shopping links.
-
-- Input Tokens: ~900–1,300
-- Output: Top recommendations + purchase links
-- Context Window: 4K
-- Latency: ~3 sec
-- Models: Gemini Flash, GPT-4.1 Mini
-
-## 3. Visualization Agent
-
-**Responsibility:** Generate outfit previews.
-
-- Output: 1024×1024 image
-- Latency: 7–8 sec
-- Model: Google Nano Banana
+Color legend used in the system diagrams: **Blue** = workflows, **Yellow** = master/controller agents, **Pink** = sub-agents, **Light Pink** = tools, **Green** = RAG/grounding.
 
 ---
 
@@ -209,8 +200,9 @@ within a defined time window (1 hour).
 | Mobile App | Android |
 | Backend API | FastAPI |
 | Agent Framework | CrewAI |
-| Planning Models | GPT-4.1 Mini / Claude Sonnet 4 |
-| Recommendation Models | Gemini Flash |
+| Planning / Recommendation Models | Gemini 2.5 Flash |
+| Review Model | GPT-OSS 120B (Groq) |
+| Intent & Guardrails Model | Gemma 4 31B |
 | Image Generation | Google Nano Banana |
 
 ---
@@ -225,3 +217,11 @@ https://drive.google.com/drive/folders/17XrJHqIj90X74EYwHycOArIu4pMYTrKx?usp=sha
 - Personalized style memory
 - AI stylist chat experience
 - Social outfit sharing
+
+---
+
+# Further Reading
+
+Full product spec — customer discovery, user journeys, AI UX, safety & human-in-the-loop, evaluation, metrics, prompt versioning, and cost breakdown:
+
+https://sandy-source-975.notion.site/ShopAI-3b2fc9a58c1d80409af5df693f396762
