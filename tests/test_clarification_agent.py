@@ -9,10 +9,11 @@ def test_clarification_agent_is_configured():
     assert agent.goal
 
 
-def test_clarification_agent_joins_the_recommendation_crew():
+def test_clarification_agent_is_not_part_of_the_recommendation_crew():
+    """It runs before the crew; only requests ready to plan ever reach it."""
     crew = Shopai().recommendation_crew("run-1")
     roles = [a.role for a in crew.agents]
-    assert any("clarif" in role.lower() for role in roles)
+    assert not any("clarif" in role.lower() for role in roles)
 
 
 def test_clarification_agent_does_not_delegate():
