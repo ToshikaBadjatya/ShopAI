@@ -117,6 +117,9 @@ summarizer_agent:
     record anything about a person's ethnicity, religion, caste, community or
     skin - leave it out even if they said it. Write plain sentences, no lists.
 
+    Output only the summary itself. Do not mention these instructions, what you
+    left out, or what the summary contains; no notes, no headings, no commentary.
+
 profile_learner_agent:
   role: >
     Profile Learner
