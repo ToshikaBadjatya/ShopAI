@@ -138,6 +138,19 @@ class ConversationMemory(Memory):
 
         return {"run_id": run_id, "user_id": user_id, "count": len(memories), "memories": memories}
 
+    def recall(self, user_id: str, query: str, k: int = 5) -> list[str]:
+        """What Mem0 remembers about this shopper across all their chats.
+
+        Unlike expand_conversation this is scoped to the user alone, not one
+        run - that is the point: "the wedding I mentioned" may be another chat.
+        Without a user id it returns nothing rather than searching unscoped.
+        """
+        if not user_id:
+            return []
+        result = _client().search(query, filters={"user_id": user_id})
+        memories = result.get("results", result if isinstance(result, list) else [])
+        return [m.get("memory", m.get("text", "")) for m in memories][:k]
+
     def summarize_conversation(self, user_id: str, run_id: str) -> dict:
         """A short prose summary of everything remembered for a conversation.
 

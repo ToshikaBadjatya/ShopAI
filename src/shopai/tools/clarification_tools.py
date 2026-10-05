@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 
 from shopai.clarity import DIMENSION_TERMS
 from shopai.memory import memory
+from shopai.memory.user_memory import user_id_from_token
 from shopai.tools.user_memory_tools import GetUserMemoryTool
 
 # ---------------------------------------------------------------------------
@@ -83,10 +84,37 @@ class GetConversationHistoryTool(BaseTool):
         return json.dumps({"user_text": text})
 
 
+class RecallInput(BaseModel):
+    query: str = Field(..., description="What the shopper is referring to, in their words.")
+
+
+class RecallMemoriesTool(BaseTool):
+    name: str = "recall_memories"
+    description: str = (
+        "Look up what ShopAI remembers about this shopper from earlier chats - "
+        "use it when they refer back to something ('the wedding I mentioned', "
+        "'like last time'). Returns short remembered facts; never treat one as "
+        "something they said today."
+    )
+    args_schema: Type[BaseModel] = RecallInput
+    access_token: str = ""
+
+    def _run(self, query: str) -> str:
+        user_id = user_id_from_token(self.access_token) if self.access_token else ""
+        if not user_id:
+            return json.dumps({"memories": []})
+        try:
+            memories = memory.conversation.recall(user_id, query)
+        except Exception:
+            memories = []
+        return json.dumps({"memories": memories})
+
+
 def clarification_context_tools(run_id: str, access_token: str) -> list[BaseTool]:
-    """The three read-only context tools, bound to one run and one shopper."""
+    """The read-only context tools, bound to one run and one shopper."""
     return [
         LookupCategoryTermsTool(),
         GetConversationHistoryTool(run_id=run_id, access_token=access_token),
         GetUserMemoryTool(access_token=access_token),
+        RecallMemoriesTool(access_token=access_token),
     ]

@@ -49,4 +49,6 @@ def test_history_read_failure_degrades_to_empty():
 
 def test_factory_returns_the_context_tools():
     names = {t.name for t in clarification_context_tools("r1", "tok")}
-    assert names == {"lookup_category_terms", "get_conversation_history", "get_user_memory"}
+    assert names == {
+        "lookup_category_terms", "get_conversation_history", "get_user_memory", "recall_memories",
+    }

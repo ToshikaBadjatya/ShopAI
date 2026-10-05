@@ -119,3 +119,18 @@ def merge_fact(row: dict, field: str, value: Any) -> dict:
             update[other] = other_kept
 
     return update
+
+
+# Sentences naming any of these never leave for Mem0's cloud. Matched on whole
+# words, so "grace" and "embrace" are safe; the cost of a false hit is one
+# dropped sentence, the cost of a miss is a shopper's religion in a third party.
+_SENSITIVE = re.compile(
+    r"\b(?:ethnic\w*|rac(?:e|ial|ist)|relig\w*|caste|nationalit\w*|communit\w*"
+    r"|hindu|muslim|christian|sikh|jain|jewish|buddhist|skin|complexion)\b",
+    re.IGNORECASE,
+)
+
+
+def redact_sensitive(text: str) -> str:
+    """The text with every sentence that mentions a sensitive attribute removed."""
+    return ". ".join(s for s in _sentences(text) if not _SENSITIVE.search(s))

@@ -38,10 +38,10 @@ def _crew_returning(pydantic):
     return crew
 
 
-def test_agent_carries_the_three_context_tools():
+def test_agent_carries_the_context_tools():
     agent = Shopai().clarification_agent("run-1", "tok")
     assert {t.name for t in agent.tools} == {
-        "lookup_category_terms", "get_conversation_history", "get_user_memory",
+        "lookup_category_terms", "get_conversation_history", "get_user_memory", "recall_memories",
     }
 
 

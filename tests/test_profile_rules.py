@@ -99,3 +99,35 @@ def test_a_colour_added_to_works_leaves_the_avoid_list():
         "colors_that_work": ["sage"],
         "colors_to_avoid": [],
     }
+
+
+from shopai.profile_rules import redact_sensitive
+
+
+@pytest.mark.parametrize("sensitive", [
+    "I'm of Punjabi ethnicity",
+    "My race affects what suits me",
+    "My religion asks for modest sleeves",
+    "I'm Hindu so I wear red to weddings",
+    "I'm Muslim and prefer long sleeves",
+    "My caste is not something I mention",
+    "I hold Indian nationality",
+    "People in my community dress traditionally",
+    "My skin tone is deep",
+    "My complexion is fair",
+])
+def test_sensitive_sentences_are_dropped(sensitive):
+    out = redact_sensitive(f"I love linen. {sensitive}. Show me a dress")
+    assert out == "I love linen. Show me a dress"
+
+
+def test_text_with_nothing_sensitive_is_unchanged():
+    assert redact_sensitive("I always avoid maroon. Show me a dress") == "I always avoid maroon. Show me a dress"
+
+
+def test_all_sensitive_text_becomes_empty():
+    assert redact_sensitive("My religion matters. My skin tone is deep.") == ""
+
+
+def test_words_that_merely_contain_a_term_are_kept():
+    assert redact_sensitive("I want a grace-style gown. Embrace colour") == "I want a grace-style gown. Embrace colour"
