@@ -47,6 +47,16 @@ class ClarificationAssessment(BaseModel):
     suggestion: str = Field("", description="Optional hint from the profile, e.g. 'you usually like linen'.")
 
 
+# Words that name nothing. "I need an outfit" specifies no outfit type - the
+# keyword scorer excludes them for the same reason - so evidence made only of
+# these cannot show a category.
+GENERIC_WORDS = {
+    "outfit", "outfits", "look", "looks", "clothes", "clothing", "something",
+    "anything", "wear", "style", "stuff", "thing", "things",
+    "a", "an", "the", "to", "for", "some", "new", "nice", "good", "cool", "want", "need",
+}
+
+
 def _normal(text: str) -> str:
     return " ".join(re.findall(r"[a-z0-9'-]+", text.lower()))
 
@@ -58,7 +68,9 @@ def verify_assessment(assessment: ClarificationAssessment, user_text: str) -> di
         if finding.category in matched or finding.status != "stated":
             continue
         needle = _normal(finding.evidence)
-        if needle and f" {needle} " in haystack:
+        if not set(needle.split()) - GENERIC_WORDS:
+            continue
+        if f" {needle} " in haystack:
             matched[finding.category] = [finding.value or finding.evidence]
 
     present = [d for d in DIMENSION_WEIGHTS if d in matched]

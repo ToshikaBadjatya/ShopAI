@@ -84,3 +84,22 @@ def test_fallback_uses_the_keyword_result_and_a_templated_question():
     assert result["source"] == "fallback"
     assert result["tier"] == kw["tier"]
     assert result["question"] == QUESTION_FOR_GAP["event"]
+
+
+def test_generic_words_are_not_evidence_for_any_category():
+    """Found on Qwen3: 'Want a cool outfit' - the agent counted 'outfit' as an
+    outfit type. A word that names nothing cannot show a category."""
+    result = verify_assessment(_a(_stated("outfit_type", "outfit")), "Want a cool outfit")
+    assert result["present"] == []
+    assert result["tier"] == "low"
+
+
+def test_a_generic_word_beside_a_real_one_still_counts():
+    result = verify_assessment(_a(_stated("outfit_type", "dress outfit")), "a dress outfit for me")
+    assert result["present"] == ["outfit_type"]
+
+
+def test_an_explicit_ask_cannot_promote_on_generic_words_alone():
+    text = "Want a cool outfit, show me options"
+    result = verify_assessment(_a(_stated("outfit_type", "outfit")), text)
+    assert result["tier"] == "low" and result["promoted"] is False
