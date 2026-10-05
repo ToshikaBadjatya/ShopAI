@@ -1,6 +1,14 @@
 from unittest.mock import MagicMock, patch
 
+from shopai.clarity import score_request
 from shopai.crew import Shopai
+
+HIGH = "black fitted midi dress for a cocktail party with gold jewellery"
+
+
+def _keyword_only(prompt, user_text, run_id="", access_token=""):
+    """The clarification step without a model: the keyword verdict plus a fixed question."""
+    return {**score_request(user_text), "question": "What's the occasion?", "source": "keyword"}
 
 
 def _run(prompt, user_text=None):
@@ -12,6 +20,7 @@ def _run(prompt, user_text=None):
     # AttributeError: __get__ - so patch.object(Shopai, ...) fails before your
     # test body ever runs.
     shopai = Shopai()
+    shopai.run_clarification = _keyword_only
     with patch.object(shopai, "recommendation_crew", return_value=crew), \
          patch("shopai.crew.memory") as mem:
         mem.conversation.user_text.return_value = user_text if user_text is not None else prompt
@@ -31,10 +40,23 @@ def test_a_vague_request_scores_low():
 
 def test_the_tier_reaches_the_crew_inputs():
     """The master cannot route on a score it was never handed."""
-    _, crew = _run("wedding guest dress")
+    _, crew = _run(HIGH)
     inputs = crew.kickoff.call_args.kwargs["inputs"]
-    assert inputs["clarity_tier"] == "medium"
-    assert "colors" in inputs["clarity_missing"]
+    assert inputs["clarity_tier"] == "high"
+    assert inputs["clarity_missing"] == "none"
+
+
+def test_a_vague_request_returns_the_question_without_starting_the_crew():
+    result, crew = _run("help me with my style")
+    crew.kickoff.assert_not_called()
+    assert result["summary"] == "What's the occasion?"
+    assert result["recommendations"] == []
+
+
+def test_a_medium_request_also_asks_instead_of_running_the_crew():
+    result, crew = _run("wedding guest dress")
+    crew.kickoff.assert_not_called()
+    assert result["clarity"]["tier"] == "medium"
 
 
 def test_scoring_reads_the_accumulated_run_text_not_just_this_turn():
@@ -50,18 +72,18 @@ def test_conversation_text_reaches_the_crew_inputs():
     """The master's task needs the accumulated text to hand to the
     clarification agent's tool via delegation - not just this turn's prompt."""
     _, crew = _run(
-        "something in navy",
-        user_text="wedding guest dress\nsomething in navy",
+        "in navy, show me options",
+        user_text="wedding guest dress\nin navy, show me options",
     )
     inputs = crew.kickoff.call_args.kwargs["inputs"]
-    assert inputs["conversation_text"] == "wedding guest dress\nsomething in navy"
+    assert inputs["conversation_text"] == "wedding guest dress\nin navy, show me options"
 
 
 def test_run_id_still_reaches_the_crew_inputs():
     """Regression guard: a fix that landed before this task added run_id to
     the inputs so the master can name which run it is on. Scoring must not
     displace it."""
-    _, crew = _run("wedding guest dress")
+    _, crew = _run(HIGH)
     inputs = crew.kickoff.call_args.kwargs["inputs"]
     assert inputs["run_id"]
 
@@ -70,6 +92,7 @@ def test_writes_the_user_turn_to_the_transcript():
     crew = MagicMock()
     crew.kickoff.return_value = "{}"
     shopai = Shopai()
+    shopai.run_clarification = _keyword_only
     with patch.object(shopai, "recommendation_crew", return_value=crew), \
          patch("shopai.crew.memory") as mem:
         mem.conversation.user_text.return_value = "wedding guest dress"
@@ -86,6 +109,7 @@ def test_the_user_turn_is_written_before_scoring_reads_it():
     crew = MagicMock()
     crew.kickoff.return_value = "{}"
     shopai = Shopai()
+    shopai.run_clarification = _keyword_only
     call_order = []
     with patch.object(shopai, "recommendation_crew", return_value=crew), \
          patch("shopai.crew.memory") as mem:
@@ -101,10 +125,10 @@ def test_the_user_turn_is_written_before_scoring_reads_it():
     assert "user_text" in call_order
 
 
-def test_writes_the_agent_summary_turn_after_the_crew_runs():
+def test_a_question_is_recorded_as_the_agent_turn_without_running_the_crew():
     crew = MagicMock()
-    crew.kickoff.return_value = "not json, just a question for the user"
     shopai = Shopai()
+    shopai.run_clarification = _keyword_only
     with patch.object(shopai, "recommendation_crew", return_value=crew), \
          patch("shopai.crew.memory") as mem:
         mem.conversation.user_text.return_value = "help me with my style"
@@ -112,8 +136,24 @@ def test_writes_the_agent_summary_turn_after_the_crew_runs():
             "help me with my style", {}, run_id="run-1", access_token="tok"
         )
 
+    crew.kickoff.assert_not_called()
     mem.conversation.append.assert_any_call(
-        "run-1", "agent", "not json, just a question for the user", access_token="tok"
+        "run-1", "agent", "What's the occasion?", access_token="tok"
+    )
+
+
+def test_writes_the_agent_summary_turn_after_the_crew_runs():
+    crew = MagicMock()
+    crew.kickoff.return_value = "not json, just prose for the user"
+    shopai = Shopai()
+    shopai.run_clarification = _keyword_only
+    with patch.object(shopai, "recommendation_crew", return_value=crew), \
+         patch("shopai.crew.memory") as mem:
+        mem.conversation.user_text.return_value = HIGH
+        shopai.run_master_recommendation(HIGH, {}, run_id="run-1", access_token="tok")
+
+    mem.conversation.append.assert_any_call(
+        "run-1", "agent", "not json, just prose for the user", access_token="tok"
     )
 
 
@@ -124,6 +164,7 @@ def test_no_agent_turn_written_when_the_crew_returns_a_real_plan():
     crew = MagicMock()
     crew.kickoff.return_value = '{"recommendations": [{"outfit_name": "Look 1", "products": []}]}'
     shopai = Shopai()
+    shopai.run_clarification = _keyword_only
     with patch.object(shopai, "recommendation_crew", return_value=crew), \
          patch("shopai.crew.memory") as mem:
         mem.conversation.user_text.return_value = (
@@ -145,6 +186,7 @@ def test_transcript_writes_are_best_effort():
     crew = MagicMock()
     crew.kickoff.return_value = "{}"
     shopai = Shopai()
+    shopai.run_clarification = _keyword_only
     with patch.object(shopai, "recommendation_crew", return_value=crew), \
          patch("shopai.crew.memory") as mem:
         mem.conversation.append.side_effect = Exception("JWT expired")
@@ -160,6 +202,7 @@ def test_no_transcript_write_without_an_access_token():
     crew = MagicMock()
     crew.kickoff.return_value = "{}"
     shopai = Shopai()
+    shopai.run_clarification = _keyword_only
     with patch.object(shopai, "recommendation_crew", return_value=crew), \
          patch("shopai.crew.memory") as mem:
         shopai.run_master_recommendation("help me with my style", {}, run_id="run-1")
@@ -175,6 +218,7 @@ def test_a_transcript_read_failure_falls_back_to_this_message_alone():
     crew = MagicMock()
     crew.kickoff.return_value = "{}"
     shopai = Shopai()
+    shopai.run_clarification = _keyword_only
     with patch.object(shopai, "recommendation_crew", return_value=crew), \
          patch("shopai.crew.memory") as mem:
         mem.conversation.user_text.side_effect = Exception("JWT expired")

@@ -201,7 +201,6 @@ class Shopai():
                 self.recommendation_agent(),
                 self.review_recommendation_agent(),
                 self.visualize_agent(),
-                self.clarification_agent(),
             ],
             tasks=[
                 Task(
@@ -298,7 +297,17 @@ class Shopai():
                 # not the run itself - better than failing the whole request
                 # over a transcript read.
                 pass
-        clarity = score_request(scored_text)
+        clarity = self.run_clarification(prompt, scored_text, run_id, access_token)
+        if clarity["tier"] != "high":
+            question = clarity["question"]
+            self._append_turn(run_id, "agent", question, access_token)
+            return {
+                "recommendations": [],
+                "summary": question,
+                "raw": question,
+                "run_id": run_id,
+                "clarity": clarity,
+            }
 
         inputs = {
             "shopping_request": prompt,

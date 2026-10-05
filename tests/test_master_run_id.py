@@ -19,7 +19,9 @@ def _kickoff_inputs(run_id=None):
     # attributes expecting descriptors, and a MagicMock has no __get__.
     shopai = Shopai()
     with patch.object(shopai, "recommendation_crew", return_value=crew):
-        result = shopai.run_master_recommendation("navy saree", {}, run_id=run_id)
+        result = shopai.run_master_recommendation(
+            "black fitted midi dress for a cocktail party with gold jewellery", {}, run_id=run_id
+        )
     return crew.kickoff.call_args.kwargs["inputs"], result
 
 
