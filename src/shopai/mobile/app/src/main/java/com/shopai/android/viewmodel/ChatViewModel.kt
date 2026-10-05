@@ -112,7 +112,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         currentRunId = null
         viewModelScope.launch {
             try {
-                RetrofitClient.apiService.clearTask(runId)
+                val token = SupabaseAuth.freshAccessToken(getApplication())
+                RetrofitClient.apiService.clearTask(runId, token?.let { "Bearer $it" })
             } catch (e: Exception) {
                 // Best-effort - see the doc comment above.
             }
