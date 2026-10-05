@@ -292,6 +292,12 @@ class Shopai():
             "clarity_tier": clarity["tier"],
             "clarity_present": ", ".join(clarity["present"]) or "none",
             "clarity_missing": ", ".join(clarity["missing"]) or "none",
+            "explicit_request": (
+                "yes - they asked to be shown recommendations" if clarity["explicit_request"] else "no"
+            ),
+            "wants_choice": (
+                "yes - they asked you to help them choose" if clarity["wants_choice"] else "no"
+            ),
         }
 
         raw = str(self.recommendation_crew(run_id).kickoff(inputs=inputs))
@@ -326,7 +332,12 @@ class Shopai():
         parsed = self._extract_json_from_text(raw)
 
         if isinstance(parsed, dict) and isinstance(parsed.get("recommendations"), list):
-            return {"recommendations": parsed["recommendations"], "summary": "", "raw": raw}
+            return {
+                "recommendations": parsed["recommendations"],
+                "summary": "",
+                "raw": raw,
+                "top_pick": str(parsed.get("top_pick") or ""),
+            }
 
         if isinstance(parsed, list):
             return {"recommendations": parsed, "summary": "", "raw": raw}

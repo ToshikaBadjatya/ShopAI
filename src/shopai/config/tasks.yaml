@@ -66,10 +66,18 @@ master_recommendation_task:
     This request scored {clarity_tier} on clarity. Present: {clarity_present}.
     Missing: {clarity_missing}.
 
+    Explicit request: {explicit_request}. Help me choose: {wants_choice}.
+    When the user explicitly asked to see recommendations, the score has already
+    been raised to high - do not ask them anything first. Where a dimension is
+    missing, plan around it with sensible variety rather than stopping.
+
     Route on that score, and record which path you took in the task ledger:
 
     - high: run the plan workflow. Delegate curation to the recommendation
       specialist, then critique to the reviewer, then imagery to the visualizer.
+      When the user asked you to help them choose, finish with your single
+      recommended pick among the outfits and one sentence on why it suits them
+      best - put it in a "top_pick" field next to "recommendations".
     - medium: delegate to the Styling Clarifier. Give it the full conversation
       so far - {conversation_text} - and tell it the tier is medium with these
       dimensions missing: {clarity_missing}.

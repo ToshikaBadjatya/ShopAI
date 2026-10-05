@@ -148,3 +148,18 @@ def test_an_out_of_scope_request_is_still_refused():
     body = response.json()
     assert body["kind"] == "error"
     assert body["errorKind"] == "out_of_scope"
+
+
+def test_top_pick_rides_on_the_plan_message():
+    from shopai.api.app import OutfitPlanResponse, _plan_result
+
+    plan = _plan_result([OutfitPlanResponse(outfitName="Pastel brunch")], top_pick="Go with Pastel brunch - lightest.")
+    assert plan.kind == "plan"
+    assert plan.message == "Go with Pastel brunch - lightest."
+
+
+def test_parser_keeps_the_top_pick():
+    from shopai.crew import Shopai
+
+    raw = '{"recommendations": [{"outfit_name": "A", "products": []}], "top_pick": "A - cooler."}'
+    assert Shopai()._parse_recommendation_crew_output(raw)["top_pick"] == "A - cooler."

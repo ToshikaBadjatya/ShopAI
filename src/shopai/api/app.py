@@ -120,10 +120,13 @@ def _recommendation_to_outfits(plan_id: str, recommendation: dict) -> List[Outfi
     return outfits
 
 
-def _plan_result(outfits: List[OutfitPlanResponse], summary: str = "") -> PlanResponse:
+def _plan_result(
+    outfits: List[OutfitPlanResponse], summary: str = "", top_pick: str = ""
+) -> PlanResponse:
     """A plan with nothing in it is a message, not a plan - say so plainly."""
     if outfits:
-        return PlanResponse(kind="plan", outfits=outfits)
+        # `message` carries the master's single pick when the user asked for one.
+        return PlanResponse(kind="plan", outfits=outfits, message=top_pick)
     return PlanResponse(
         kind="message",
         message=summary or "I couldn't pull a look together for that. Tell me a bit more?",
@@ -238,6 +241,7 @@ async def _plan(request: PlanRequest) -> PlanResponse:
     response = _plan_result(
         _recommendation_to_outfits(run_id, result),
         summary=result.get("summary", ""),
+        top_pick=result.get("top_pick", ""),
     )
     response.runId = run_id
 

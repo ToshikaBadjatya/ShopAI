@@ -16,7 +16,14 @@ COLOR_TERMS = {
     "blue", "navy", "cobalt", "indigo", "denim", "powder", "turquoise", "aqua",
     "purple", "lavender", "lilac", "violet", "plum", "mauve",
     "pastel", "pastels", "neon", "metallic", "monochrome", "neutral", "neutrals",
-    "jewel", "earthy", "muted", "bright", "dark", "light", "warm", "cool",
+    "jewel", "earthy", "muted", "bright", "dark", "light",
+    # "warm" and "cool" are deliberately absent: "a cool outfit" is slang, not a
+    # colour. clarity.py counts them only beside a word like "tones" or "shades".
+    # Soft and seasonal shades - "light pastel tones" is a colour brief too.
+    "pale", "dusty", "off-white", "offwhite", "ecru", "oatmeal",
+    "khaki", "taupe", "champagne", "apricot", "seafoam",
+    "periwinkle", "tangerine", "blush-pink",
+    "earth-tones", "earth-tone", "jewel-tones",
 }
 
 SILHOUETTE_TERMS = {
@@ -27,6 +34,12 @@ SILHOUETTE_TERMS = {
     "midi", "maxi", "mini", "knee-length", "ankle-length", "floor-length",
     "sleeveless", "strapless", "halter", "off-shoulder", "puffed", "balloon",
     "v-neck", "vneck", "square-neck", "boat-neck", "collared", "layered", "asymmetric",
+    # Airy fits and cut details.
+    "breezy", "airy", "lightweight", "flowing", "billowy", "ruffled", "tiered",
+    "smocked", "shirred", "gathered", "boxy", "fit-and-flare", "pleated",
+    "bell-sleeve", "puff-sleeve", "cap-sleeve", "short-sleeve", "long-sleeve",
+    "full-sleeve", "three-quarter", "backless", "cutout", "button-down", "tie-up",
+    "romper-fit", "co-ordinated", "slouchy", "snug", "stretchy",
 }
 
 EVENT_TERMS = {
@@ -50,6 +63,12 @@ VIBE_TERMS = {
     "streetwear", "street", "y2k", "coquette", "cottagecore", "clean-girl",
     "glam", "glamorous", "sultry", "sexy", "cozy", "comfy", "effortless",
     "traditional", "indo-western", "fusion", "festive", "summery", "wintery",
+    # Seasons, weather and everyday settings - specific enough to dress for.
+    "summer", "spring", "autumn", "fall", "winter", "monsoon", "rainy", "sunny",
+    "humid", "chilly", "breezy-day", "beachy", "resort-wear", "vacay",
+    "everyday", "daily", "weekend", "day-out", "errands", "daywear", "evening",
+    "soft", "dreamy", "fresh", "pretty", "dressy", "put-together", "laid-back",
+    "relaxed-fit", "easygoing", "light-hearted", "feminine-chic", "girly",
 }
 
 OUT_OF_SCOPE_TERMS = {
@@ -70,12 +89,24 @@ GARMENT_TERMS = {
     "sherwani", "palazzo", "co-ord", "coord",
     "shoes", "heels", "sneakers", "sandals", "boots", "loafers",
     "flats", "mules", "wedges", "juttis", "kolhapuris",
+    # Summer and everyday pieces, plus footwear variants.
+    "sundress", "sundresses", "romper", "rompers", "playsuit", "shorts", "culottes",
+    "capris", "joggers", "leggings", "tunic", "tunics", "blouse", "blouses", "polo",
+    "tank-top", "kaftan", "caftan", "shacket", "chinos", "dungarees", "overalls",
+    "sarong", "sharara", "gharara", "dhoti", "tracksuit", "swimsuit", "bikini",
+    "shirtdress", "skirts", "sneaker", "sandal", "espadrilles", "ballerinas",
+    "oxfords", "stilettos", "clogs", "slippers", "linen-shirt", "kurta-set",
 }
 
 ACCESSORY_TERMS = {
     "accessory", "accessories", "bag", "handbag", "clutch", "tote",
     "jewellery", "jewelry", "earrings", "necklace", "bangles", "bracelet",
     "belt", "watch", "scarf", "dupatta", "sunglasses",
+    # Head, hair, hands, feet, and everything carried.
+    "hat", "sunhat", "cap", "headband", "hairband", "hair-clip", "scrunchie",
+    "anklet", "anklets", "pendant", "choker", "brooch", "stole",
+    "shawl", "gloves", "socks", "wallet", "backpack", "crossbody", "purse",
+    "sling-bag", "studs", "hoops", "jhumkas", "tikka", "bindi",
 }
 
 # The broad set: anything that says a request is about clothes at all,

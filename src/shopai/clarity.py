@@ -46,8 +46,52 @@ HIGH_THRESHOLD = 5
 MEDIUM_THRESHOLD = 2
 
 
+# A user who asks for results ("show me", "recommend", "help me choose") has
+# told us they want a plan now. Patterns are stems and phrases, so a typo in
+# the tail of a word ("recommnedation") still lands.
+EXPLICIT_PATTERNS = [
+    r"\bshow me\b",
+    r"\bshow\b.*\b(?:recom\w*|options?|outfits?|looks?|picks?|ideas?)\b",
+    r"\brecom\w*",
+    r"\bsuggest\w*",
+    r"\bgive me\b",
+    r"\bfind me\b",
+    r"\bwhat should i (?:wear|buy|get)\b",
+    r"\bhelp me (?:choose|pick|decide|select|find)\b",
+    r"\boptions\b",
+    r"\bideas\b",
+]
+
+# The narrower ask: they want a pick made for them, not just a list.
+CHOICE_PATTERNS = [
+    r"\bhelp me (?:choose|pick|decide|select)\b",
+    r"\bwhich (?:one|should)\b",
+    r"\bbest (?:one|option|pick)\b",
+    r"\bdecide\b",
+]
+
+
 def _words(text: str) -> set[str]:
-    return set(re.findall(r"[a-z][a-z'-]*", text.lower()))
+    """Lower-cased words, each also under its singular so 'sundresses' and
+    'anklets' meet the singular entries in the word lists."""
+    words = set(re.findall(r"[a-z][a-z'-]*", text.lower()))
+    for word in list(words):
+        if word.endswith("es") and len(word) > 4:
+            words.add(word[:-2])
+        if word.endswith("s") and len(word) > 3:
+            words.add(word[:-1])
+    return words
+
+
+# "cool" / "warm" are colour words only when they describe tones.
+TEMPERATURE_TONES = re.compile(
+    r"\b(?:cool|warm)(?:[ -]toned?|[ -]tones|[ -]shades?|[ -]colou?rs?|[ -]palette|[ -]undertones?)\b"
+)
+
+
+def _asks(patterns: list[str], text: str) -> bool:
+    lowered = text.lower()
+    return any(re.search(pattern, lowered) for pattern in patterns)
 
 
 def score_request(text: str) -> dict:
@@ -62,6 +106,8 @@ def score_request(text: str) -> dict:
         dimension: sorted(words & terms)
         for dimension, terms in DIMENSION_TERMS.items()
     }
+    if TEMPERATURE_TONES.search(text.lower()):
+        matched["colors"] = sorted(set(matched["colors"]) | {"warm/cool tones"})
     present = [d for d, hits in matched.items() if hits]
     missing = [d for d in DIMENSION_TERMS if d not in present]
     score = sum(DIMENSION_WEIGHTS[d] for d in present)
@@ -73,6 +119,15 @@ def score_request(text: str) -> dict:
     else:
         tier = "low"
 
+    # An explicit ask turns "medium" into a go-ahead, so someone who said
+    # "show me options" is not made to answer another question first. It never
+    # lifts "low": asking for results does not turn an empty request into one,
+    # and the score itself stays as measured.
+    explicit = _asks(EXPLICIT_PATTERNS, text)
+    promoted = explicit and tier == "medium"
+    if promoted:
+        tier = "high"
+
     return {
         "tier": tier,
         "score": score,
@@ -80,4 +135,7 @@ def score_request(text: str) -> dict:
         "present": present,
         "missing": missing,
         "matched": {d: hits for d, hits in matched.items() if hits},
+        "explicit_request": explicit,
+        "promoted": promoted,
+        "wants_choice": _asks(CHOICE_PATTERNS, text),
     }
