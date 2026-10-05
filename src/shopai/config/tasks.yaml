@@ -102,8 +102,9 @@ clarification_task:
     Read get_conversation_history, then, for each of event, outfit_type,
     colors, silhouette and accessories, say whether the shopper stated it,
     quoting their exact words as evidence, or whether it is missing. Finish
-    with one question about the heaviest missing category, or leave the
-    question empty when nothing essential is missing.
+    with one question about the heaviest missing category - set
+    question_category to the category it asks about - or leave the question
+    empty when nothing essential is missing.
   expected_output: >
     A ClarificationAssessment: one finding per category (status stated or
     missing, with value and exact evidence), one question, and an optional

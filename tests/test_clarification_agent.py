@@ -84,3 +84,18 @@ def test_missing_structured_output_falls_back():
     with patch("shopai.crew.Crew", return_value=_crew_returning(None)):
         result = shopai.run_clarification("Want a cool outfit", "Want a cool outfit")
     assert result["source"] == "fallback"
+
+
+def test_the_clarifier_is_bounded_so_the_fallback_fires_before_the_app_gives_up():
+    """Important 4: the Android read timeout is 120 s."""
+    agent = Shopai().clarification_agent()
+    assert agent.max_execution_time is not None and agent.max_execution_time <= 60
+    assert agent.max_iter <= 5
+
+
+def test_run_clarification_gives_the_keyword_result_to_the_verifier():
+    """Important 3, end to end: an agent returning nothing must not erase 'wedding guest dress'."""
+    empty = ClarificationAssessment(findings=[])
+    with patch("shopai.crew.Crew", return_value=_crew_returning(empty)):
+        result = Shopai().run_clarification("wedding guest dress", "wedding guest dress")
+    assert set(result["present"]) == {"event", "outfit_type"}

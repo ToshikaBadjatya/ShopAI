@@ -8,7 +8,7 @@ No CrewAI import, so this tests without a model.
 """
 
 import re
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -44,6 +44,9 @@ class CategoryFinding(BaseModel):
 class ClarificationAssessment(BaseModel):
     findings: list[CategoryFinding]
     question: str = Field("", description="One plain-language question about the heaviest missing category.")
+    question_category: Optional[Category] = Field(
+        None, description="The category the question asks about; it must be one still missing."
+    )
     suggestion: str = Field("", description="Optional hint from the profile, e.g. 'you usually like linen'.")
 
 
@@ -54,6 +57,8 @@ GENERIC_WORDS = {
     "outfit", "outfits", "look", "looks", "clothes", "clothing", "something",
     "anything", "wear", "style", "stuff", "thing", "things",
     "a", "an", "the", "to", "for", "some", "new", "nice", "good", "cool", "want", "need",
+    "i", "me", "my", "mine", "we", "us", "you", "it", "is", "am", "are", "be", "do", "have",
+    "can", "would", "like", "please", "and", "or", "of", "in", "on", "with", "show", "give", "find",
 }
 
 
@@ -61,17 +66,37 @@ def _normal(text: str) -> str:
     return " ".join(re.findall(r"[a-z0-9'-]+", text.lower()))
 
 
-def verify_assessment(assessment: ClarificationAssessment, user_text: str) -> dict:
+def verify_assessment(
+    assessment: ClarificationAssessment, user_text: str, keyword: Optional[dict] = None
+) -> dict:
+    """Count only what the shopper's own words support.
+
+    `keyword` is the keyword scorer's result for the same text. Its hits are in
+    the shopper's words by construction, so they are kept even when the agent
+    misses them - an agent that forgets "wedding guest dress" must not make the
+    shopper say it again.
+    """
     haystack = f" {_normal(user_text)} "
     matched: dict[str, list[str]] = {}
+    spans_used: set[str] = set()
+    dropped = False
     for finding in assessment.findings:
         if finding.category in matched or finding.status != "stated":
             continue
         needle = _normal(finding.evidence)
-        if not set(needle.split()) - GENERIC_WORDS:
+        if (
+            not set(needle.split()) - GENERIC_WORDS      # names nothing
+            or needle in spans_used                      # one span, one category
+            or f" {needle} " not in haystack             # not the shopper's words
+        ):
+            dropped = True
             continue
-        if f" {needle} " in haystack:
-            matched[finding.category] = [finding.value or finding.evidence]
+        spans_used.add(needle)
+        matched[finding.category] = [finding.value or finding.evidence]
+
+    if keyword:
+        for category in keyword["present"]:
+            matched.setdefault(category, keyword["matched"].get(category, [category]))
 
     present = [d for d in DIMENSION_WEIGHTS if d in matched]
     missing = [d for d in DIMENSION_WEIGHTS if d not in matched]
@@ -86,7 +111,12 @@ def verify_assessment(assessment: ClarificationAssessment, user_text: str) -> di
     question = ""
     if tier != "high":
         gap = next(d for d in GAP_ORDER if d in missing)
-        question = assessment.question.strip() or QUESTION_FOR_GAP[gap]
+        asked = assessment.question.strip()
+        # The agent's wording is used only when its question targets something
+        # still missing and none of its findings were rejected; a question built
+        # on a rejected finding, or one that re-asks a known category, is not.
+        trusted = asked and not dropped and assessment.question_category in missing
+        question = asked if trusted else QUESTION_FOR_GAP[gap]
 
     return {
         "tier": tier,

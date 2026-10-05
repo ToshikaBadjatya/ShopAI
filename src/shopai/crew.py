@@ -184,6 +184,10 @@ class Shopai():
             config=self.agents_config['clarification_agent'],  # type: ignore[index]
             tools=clarification_context_tools(run_id, access_token),
             allow_delegation=False,
+            # Bounded so the fallback fires well inside the app's 120 s read
+            # timeout; an unbounded clarifier would outlive the request.
+            max_iter=4,
+            max_execution_time=60,
             verbose=True,
         )
 
@@ -254,7 +258,7 @@ class Shopai():
             assessment = crew.kickoff(inputs={"shopping_request": prompt}).pydantic
             if assessment is None:
                 raise ValueError("the clarifier returned no structured output")
-            return verify_assessment(assessment, user_text)
+            return verify_assessment(assessment, user_text, keyword=keyword)
         except Exception:
             return fallback_result(keyword)
 
