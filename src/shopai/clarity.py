@@ -94,6 +94,22 @@ def _asks(patterns: list[str], text: str) -> bool:
     return any(re.search(pattern, lowered) for pattern in patterns)
 
 
+def tier_for_score(score: int) -> str:
+    if score >= HIGH_THRESHOLD:
+        return "high"
+    if score >= MEDIUM_THRESHOLD:
+        return "medium"
+    return "low"
+
+
+def asks_explicitly(text: str) -> bool:
+    return _asks(EXPLICIT_PATTERNS, text)
+
+
+def asks_for_choice(text: str) -> bool:
+    return _asks(CHOICE_PATTERNS, text)
+
+
 def score_request(text: str) -> dict:
     """Rate a request's clarity and say what it was rated on.
 
@@ -112,18 +128,13 @@ def score_request(text: str) -> dict:
     missing = [d for d in DIMENSION_TERMS if d not in present]
     score = sum(DIMENSION_WEIGHTS[d] for d in present)
 
-    if score >= HIGH_THRESHOLD:
-        tier = "high"
-    elif score >= MEDIUM_THRESHOLD:
-        tier = "medium"
-    else:
-        tier = "low"
+    tier = tier_for_score(score)
 
     # An explicit ask turns "medium" into a go-ahead, so someone who said
     # "show me options" is not made to answer another question first. It never
     # lifts "low": asking for results does not turn an empty request into one,
     # and the score itself stays as measured.
-    explicit = _asks(EXPLICIT_PATTERNS, text)
+    explicit = asks_explicitly(text)
     promoted = explicit and tier == "medium"
     if promoted:
         tier = "high"
@@ -137,5 +148,5 @@ def score_request(text: str) -> dict:
         "matched": {d: hits for d, hits in matched.items() if hits},
         "explicit_request": explicit,
         "promoted": promoted,
-        "wants_choice": _asks(CHOICE_PATTERNS, text),
+        "wants_choice": asks_for_choice(text),
     }

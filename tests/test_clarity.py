@@ -176,3 +176,18 @@ def test_slang_cool_is_not_a_colour(text):
 ])
 def test_cool_and_warm_count_when_describing_tones(text):
     assert "colors" in score_request(text)["present"]
+
+
+from shopai.clarity import asks_explicitly, asks_for_choice, tier_for_score
+
+
+@pytest.mark.parametrize("score,tier", [(0, "low"), (1, "low"), (2, "medium"), (4, "medium"), (5, "high"), (7, "high")])
+def test_tier_for_score(score, tier):
+    assert tier_for_score(score) == tier
+
+
+def test_public_ask_helpers_match_score_request():
+    assert asks_explicitly("show me options") is True
+    assert asks_explicitly("wedding guest dress") is False
+    assert asks_for_choice("help me choose") is True
+    assert asks_for_choice("show me options") is False
