@@ -109,3 +109,23 @@ clarification_task:
     A ClarificationAssessment: one finding per category (status stated or
     missing, with value and exact evidence), one question, and an optional
     suggestion.
+
+summarize_task:
+  description: >
+    Previous summary: {previous_summary}
+
+    New turns to fold in:
+    {turns}
+
+    Write the updated summary, building on the previous one.
+  expected_output: >
+    The updated summary: plain sentences, at most 120 words.
+
+learn_task:
+  description: >
+    The shopper said, in their own words:
+    {turns}
+
+    Save the lasting facts they stated about themselves, following your rules.
+  expected_output: >
+    One line: what you saved, or "nothing to save".

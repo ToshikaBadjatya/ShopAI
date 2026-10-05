@@ -7,6 +7,7 @@ from crewai.project import CrewBase, agent, crew, task
 from crewai.agents.agent_builder.base_agent import BaseAgent
 
 from shopai.clarity import score_request
+from shopai.conversation_summary import should_summarize, split_for_fold
 from shopai.llm import default_llm, llm_for
 from shopai.memory import memory
 from shopai.prompts import (
@@ -18,7 +19,9 @@ from shopai.prompts import (
     VISUALIZE_PROMPT_TEMPLATE,
 )
 from shopai.clarification import ClarificationAssessment, fallback_result, verify_assessment
+from shopai.remember import remember
 from shopai.tools.clarification_tools import clarification_context_tools
+from shopai.tools.user_memory_tools import user_memory_tools
 from shopai.tools.outfit_scraper_tool import OutfitScraperTool
 from shopai.tools.task_ledger_tools import task_ledger_tools
 from shopai.tools.validation_tools import validate_request
@@ -232,6 +235,115 @@ class Shopai():
             {"intent": ..., "reason": ..., "clarification": ..., "findings": {...}}
         """
         return validate_request(prompt)
+
+    def summarizer_agent(self) -> Agent:
+        """Folds old turns into a short summary. No tools: it only rewrites text."""
+        return Agent(
+            llm=default_llm(),
+            config=self.agents_config['summarizer_agent'],  # type: ignore[index]
+            tools=[],
+            allow_delegation=False,
+            max_iter=2,
+            max_execution_time=60,
+        )
+
+    def profile_learner_agent(self, access_token: str, user_text: str) -> Agent:
+        """Saves lasting facts. Its update tool is bound to this token and to the
+        verbatim words it was shown, so it cannot write for anyone else or cite
+        words nobody said."""
+        return Agent(
+            llm=default_llm(),
+            config=self.agents_config['profile_learner_agent'],  # type: ignore[index]
+            tools=user_memory_tools(access_token, user_text),
+            allow_delegation=False,
+            max_iter=6,
+            max_execution_time=90,
+        )
+
+    def run_summarize(self, previous: str, turns_text: str) -> str:
+        """The updated summary, or "" when the model failed (the caller retries later)."""
+        try:
+            agent = self.summarizer_agent()
+            task = Task(config=self.tasks_config['summarize_task'], agent=agent)  # type: ignore[index]
+            crew = Crew(agents=[agent], tasks=[task], process=Process.sequential, verbose=False)
+            return str(crew.kickoff(inputs={
+                "previous_summary": previous or "none yet",
+                "turns": turns_text,
+            })).strip()
+        except Exception:
+            return ""
+
+    def run_learner(self, user_text: str, access_token: str) -> bool:
+        """True when the learner ran to completion (whether or not it saved anything)."""
+        try:
+            agent = self.profile_learner_agent(access_token, user_text)
+            task = Task(config=self.tasks_config['learn_task'], agent=agent)  # type: ignore[index]
+            Crew(agents=[agent], tasks=[task], process=Process.sequential, verbose=False).kickoff(
+                inputs={"turns": user_text}
+            )
+            return True
+        except Exception:
+            return False
+
+    def maintain_conversation(self, run_id: str, access_token: str, final: bool = False) -> dict:
+        """Fold old turns into the summary, and learn from them, when it is time.
+
+        Time is: the turns since the last summary pass the threshold, or the chat
+        has ended (`final`). The learner and Mem0 read the verbatim turns about to
+        be folded - never the summary - and the transcript itself is never
+        deleted, so a failed step simply retries next time: each marker only
+        advances when its own step succeeds. Never raises.
+        """
+        if not access_token:
+            return {"skipped": "guest"}
+
+        convo = memory.conversation
+        try:
+            row = convo.read_summary(run_id, access_token=access_token)
+            fresh = convo.turns_since(run_id, row.get("through_at"), access_token=access_token)
+            unseen = convo.turns_since(run_id, row.get("learned_through"), access_token=access_token)
+
+            if final:
+                to_fold, recent = fresh, []
+            elif should_summarize(fresh):
+                to_fold, recent = split_for_fold(fresh)
+            else:
+                return {"summarized": False, "learned": False}
+
+            recent_ids = {t["id"] for t in recent}
+            learn_slice = [t for t in unseen if t["id"] not in recent_ids]
+
+            learned = False
+            if learn_slice:
+                user_text = "\n".join(t["message"] for t in learn_slice if t["sender"] == "user")
+                if user_text.strip():
+                    learned = self.run_learner(user_text, access_token)
+                    remember(learn_slice, access_token, run_id)
+                else:
+                    learned = True      # nothing the shopper said, so nothing to read
+                if learned:
+                    convo.write_summary(
+                        run_id, learned_through=learn_slice[-1]["created_at"],
+                        access_token=access_token,
+                    )
+
+            summarized = False
+            if to_fold:
+                text = "\n".join(
+                    f"{'shopper' if t['sender'] == 'user' else 'stylist'}: {t['message']}"
+                    for t in to_fold
+                )
+                summary = self.run_summarize(row.get("summary", ""), text)
+                if summary:
+                    convo.write_summary(
+                        run_id, summary=summary, through_at=to_fold[-1]["created_at"],
+                        access_token=access_token,
+                    )
+                    summarized = True
+
+            return {"summarized": summarized, "learned": learned}
+        except Exception:
+            return {"skipped": "error"}
 
     def run_clarification(
         self, prompt: str, user_text: str, run_id: str = "", access_token: str = ""
