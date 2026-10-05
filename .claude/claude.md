@@ -14,7 +14,8 @@ ShopAI is an AI outfit-planning and shopping assistant ("Sia"). A **CrewAI** mul
 | Change guardrail word lists or clarity scoring | [vocabulary.py](../src/shopai/vocabulary.py), [clarity.py](../src/shopai/clarity.py) (deterministic, no model) |
 | Change prompt templates | [src/shopai/prompts.py](../src/shopai/prompts.py) |
 | Change tracing | [src/shopai/telemetry.py](../src/shopai/telemetry.py) (Arize) |
-| Change memory | [src/shopai/memory/](../src/shopai/memory/) — user (Supabase), conversation + tool (Mem0), task ledger |
+| Change memory | [src/shopai/memory/](../src/shopai/memory/) — user profile (Supabase `user_memory`), transcript + rolling summary (Supabase `conversation`, `conversation_summary`), free-form facts and cross-chat recall (Mem0, via [remember.py](../src/shopai/remember.py)), task ledger |
+| Change when/how a chat is summarised or the profile learned | [conversation_summary.py](../src/shopai/conversation_summary.py) (thresholds), [profile_rules.py](../src/shopai/profile_rules.py) (write rules, `redact_sensitive`), `Shopai.maintain_conversation` in [crew.py](../src/shopai/crew.py) |
 | Change DB schema | [supabase/migrations/](../supabase/migrations/) (apply by pasting into the Supabase SQL editor) |
 | Change the Android app | [src/shopai/mobile/](../src/shopai/mobile/) — `screens/`, `viewmodel/`, `data/api/`, `reusables/`, `ui/theme/` |
 | Run / smoke-test the server (incl. on local Ollama) | `/run-shopai` skill → [.claude/skills/run-shopai/](skills/run-shopai/SKILL.md) |
@@ -29,9 +30,13 @@ ShopAI is an AI outfit-planning and shopping assistant ("Sia"). A **CrewAI** mul
 | `marketplace_agent` | **Stub** — role is still `TODO`, no tools | — |
 | `recommendation_master_agent` | Hierarchical manager; plans against the task ledger | task-ledger tools (per `run_id`) |
 | `review_recommendation_agent` | Reviews the master's output (approve / substitute) | — |
-| `clarification_agent` | Pre-step (not in the crew): judges which of event / outfit_type / colors / silhouette / accessories the shopper stated, then asks one question | `lookup_category_terms`, `get_conversation_history`, `get_user_profile` |
+| `clarification_agent` | Pre-step (not in the crew): judges which of event / outfit_type / colors / silhouette / accessories the shopper stated, then asks one question. Described as `IF <situation> -> CALL <tool>` rules | `lookup_category_terms`, `get_conversation_history`, `get_user_memory`, `recall_memories` |
+| `summarizer_agent` | Background: folds old turns into a ≤120-word rolling summary | — |
+| `profile_learner_agent` | Background: saves lasting facts the shopper stated about themselves (rule-checked) | `get_user_memory`, `update_user_memory` |
 
-Request flow: guardrail (`run_validation`) → keyword clarity score → `run_clarification` (high skips the agent; otherwise the agent judges and Python verifies its quoted evidence, falling back to the keyword score on failure) → not ready: the question is returned as `kind: "message"` and the crew never starts; ready: hierarchical crew (master + review) → API response `kind` = `plan` / `message` / `permission` / `error`.
+Request flow: guardrail (`run_validation`) → keyword clarity score → `run_clarification` (high skips the agent; otherwise the agent judges and Python verifies its quoted evidence, falling back to the keyword score on failure) → not ready: the question is returned as `kind: "message"` and the crew never starts; ready: hierarchical crew (master + review), planning from the shopper's **accumulated** request (summary + recent turns, not just the last message) → API response `kind` = `plan` / `message` / `permission` / `error`.
+
+After a signed-in response, a **background** step (`_maintain` in `api/app.py`) summarises once the turns since the last summary pass 8 turns / 3000 chars, and the profile learner and Mem0 read the verbatim turns about to be folded. `DELETE /task/{run_id}` (the app calls it when the chat screen is left) does the same for the whole chat when it carries `Authorization: Bearer <token>`. Guests get none of this.
 
 ## Tools — where they come from
 
@@ -42,7 +47,8 @@ Request flow: guardrail (`run_validation`) → keyword clarity score → `run_cl
 | Visualization | [tools/outfit_visualization_tool.py](../src/shopai/tools/outfit_visualization_tool.py) | Hugging Face image model (`IMAGE_MODEL`, default FLUX.1-schnell; needs `HF_TOKEN`). Images land in `src/shopai/output/` |
 | Task ledger | [tools/task_ledger_tools.py](../src/shopai/tools/task_ledger_tools.py) | Task memory |
 | Validation | [tools/validation_tools.py](../src/shopai/tools/validation_tools.py) | Deterministic intent/relevance/inappropriate checks |
-| Clarification context | [tools/clarification_tools.py](../src/shopai/tools/clarification_tools.py) | Read-only: word-list lookup (`clarity.py`), conversation history (Mem0/Supabase), saved profile (Supabase). Verification logic lives in [clarification.py](../src/shopai/clarification.py) |
+| Clarification context | [tools/clarification_tools.py](../src/shopai/tools/clarification_tools.py) | Read-only: word-list lookup (`clarity.py`), conversation history (Supabase), saved profile ([user_memory_tools.py](../src/shopai/tools/user_memory_tools.py)), cross-chat recall (Mem0). Verification logic lives in [clarification.py](../src/shopai/clarification.py) |
+| User memory | [tools/user_memory_tools.py](../src/shopai/tools/user_memory_tools.py) | `update_user_memory(field, value, evidence)` over the 12 profile columns; every write passes [profile_rules.py](../src/shopai/profile_rules.py) (verbatim evidence, first-person, lasting for preferences, merge not overwrite). Bound to a token; the model never names a user |
 
 New tool: add a `BaseTool` in `tools/`, register it in [tools/registry.py](../src/shopai/tools/registry.py) (`TOOL_REGISTRY` is the single catalog; Mem0 only sees name/description/when-to-use), then give it to an agent in `crew.py`. Check `crewai_tools` for a built-in before writing a custom one.
 
@@ -81,4 +87,7 @@ Golden examples mirror the `inputs` dict that `run_master_recommendation` builds
 - A greeting like "hi" is answered by the guardrail instantly (`out_of_scope`) — it proves routing, not the model.
 - Android emulator: `API_BASE_URL` in `src/shopai/mobile/local.properties` must be `http://10.0.2.2:8000/` (`localhost` is the emulator itself). It is baked in at build time — rebuild with `./gradlew installDebug`. Physical phone: `localhost` + `adb reverse tcp:8000 tcp:8000`. The app's read timeout is 120 s.
 - A not-ready request costs one extra LLM call (~25-45 s on Qwen3 8B); a high keyword score skips it. If the agent fails, `source: "fallback"` in the clarity result means the keyword scorer answered.
+- **Apply `supabase/migrations/0003_conversation_summary.sql`** (paste into the Supabase SQL editor) before expecting summaries or profile learning; until then `maintain_conversation` quietly does nothing.
+- Mem0 receives only the shopper's own turns with every sentence naming ethnicity, religion, caste, community, nationality or skin removed (`redact_sensitive`). `MEM0_API_KEY` validity is unverified; Mem0 failures are swallowed.
+- On Qwen3 8B the clarifier often skips its tools even with the IF/CALL rules, and a clarifier that times out (60 s cap) falls back to a templated question after ~90 s; verification in Python keeps results safe either way.
 - Never commit `.env` or `local.properties`.
