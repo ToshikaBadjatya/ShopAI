@@ -2,7 +2,7 @@ import json
 from unittest.mock import patch
 
 from shopai.tools.clarification_tools import (
-    GetConversationHistoryTool, GetUserProfileTool, LookupCategoryTermsTool,
+    GetConversationHistoryTool, LookupCategoryTermsTool,
     clarification_context_tools,
 )
 
@@ -47,20 +47,6 @@ def test_history_read_failure_degrades_to_empty():
     assert out["user_text"] == ""
 
 
-def test_profile_returns_only_styling_preferences():
-    row = {"user_id": "u1", "preferred_pieces": ["kurta"], "colors_that_work": ["sage"],
-           "preferred_styles": ["minimal"], "details": {"phone": "123"}}
-    with patch("shopai.tools.clarification_tools.memory") as mem:
-        mem.user_info.read.return_value = row
-        out = json.loads(GetUserProfileTool(access_token="tok")._run())
-    assert out["preferred_pieces"] == ["kurta"]
-    assert "user_id" not in out and "details" not in out
-
-
-def test_profile_without_a_token_is_empty():
-    assert json.loads(GetUserProfileTool(access_token="")._run()) == {}
-
-
-def test_factory_returns_the_three_context_tools():
+def test_factory_returns_the_context_tools():
     names = {t.name for t in clarification_context_tools("r1", "tok")}
-    assert names == {"lookup_category_terms", "get_conversation_history", "get_user_profile"}
+    assert names == {"lookup_category_terms", "get_conversation_history", "get_user_memory"}

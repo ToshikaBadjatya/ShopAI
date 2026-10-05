@@ -20,15 +20,11 @@ from pydantic import BaseModel, Field
 
 from shopai.clarity import DIMENSION_TERMS
 from shopai.memory import memory
+from shopai.tools.user_memory_tools import GetUserMemoryTool
 
 # ---------------------------------------------------------------------------
 # Context tools for the Styling Clarifier agent
 # ---------------------------------------------------------------------------
-
-PROFILE_FIELDS = (
-    "preferred_pieces", "colors_that_work", "colors_to_avoid",
-    "preferred_styles", "preferred_fabrics", "color_season", "undertone",
-)
 
 _ALL_TERMS = sorted({t for terms in DIMENSION_TERMS.values() for t in terms})
 
@@ -87,30 +83,10 @@ class GetConversationHistoryTool(BaseTool):
         return json.dumps({"user_text": text})
 
 
-class GetUserProfileTool(BaseTool):
-    name: str = "get_user_profile"
-    description: str = (
-        "The shopper's saved styling preferences. Use it only to make your "
-        "question smarter ('you usually like X - still?'). Never treat a "
-        "profile value as something they said today."
-    )
-    args_schema: Type[BaseModel] = NoInput
-    access_token: str = ""
-
-    def _run(self) -> str:
-        if not self.access_token:
-            return json.dumps({})
-        try:
-            row = memory.user_info.read(access_token=self.access_token)
-        except Exception:
-            row = {}
-        return json.dumps({k: row[k] for k in PROFILE_FIELDS if row.get(k)})
-
-
 def clarification_context_tools(run_id: str, access_token: str) -> list[BaseTool]:
     """The three read-only context tools, bound to one run and one shopper."""
     return [
         LookupCategoryTermsTool(),
         GetConversationHistoryTool(run_id=run_id, access_token=access_token),
-        GetUserProfileTool(access_token=access_token),
+        GetUserMemoryTool(access_token=access_token),
     ]
