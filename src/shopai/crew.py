@@ -17,7 +17,8 @@ from shopai.prompts import (
     VISUALIZE_SYSTEM_TEMPLATE,
     VISUALIZE_PROMPT_TEMPLATE,
 )
-from shopai.tools.clarification_tools import FindMissingSegmentsTool
+from shopai.clarification import ClarificationAssessment, fallback_result, verify_assessment
+from shopai.tools.clarification_tools import clarification_context_tools
 from shopai.tools.outfit_scraper_tool import OutfitScraperTool
 from shopai.tools.task_ledger_tools import task_ledger_tools
 from shopai.tools.validation_tools import validate_request
@@ -172,20 +173,16 @@ class Shopai():
             verbose=True,
         )
 
-    def clarification_agent(self) -> Agent:
-        """Asks the user for what is missing - Medium and Low both land here.
+    def clarification_agent(self, run_id: str = "", access_token: str = "") -> Agent:
+        """Judges which categories the shopper stated, using read-only context tools.
 
-        Carries find_missing_segments directly. Unlike the master, it is not
-        a manager, so CrewAI does not refuse it tools - no ledger-style
-        task.tools workaround needed here.
-
-        No delegation: it has no one to hand work to, and a clarifier that
-        delegates would be answering its own question.
+        Not a manager, so CrewAI lets it hold tools. No delegation: it has no
+        one to hand work to.
         """
         return Agent(
-            llm= default_llm(),
+            llm=default_llm(),
             config=self.agents_config['clarification_agent'],  # type: ignore[index]
-            tools=[FindMissingSegmentsTool()],
+            tools=clarification_context_tools(run_id, access_token),
             allow_delegation=False,
             verbose=True,
         )
@@ -232,6 +229,35 @@ class Shopai():
             {"intent": ..., "reason": ..., "clarification": ..., "findings": {...}}
         """
         return validate_request(prompt)
+
+    def run_clarification(
+        self, prompt: str, user_text: str, run_id: str = "", access_token: str = ""
+    ) -> dict:
+        """Is this request plannable, and if not, what is the one question?
+
+        A request the keyword scorer already rates high skips the agent -
+        there is nothing to ask. Otherwise the agent judges, and Python
+        verifies: see shopai.clarification. Any agent failure falls back to
+        the keyword scorer with a templated question.
+        """
+        keyword = score_request(user_text)
+        if keyword["tier"] == "high":
+            return {**keyword, "question": "", "source": "keyword"}
+
+        try:
+            agent = self.clarification_agent(run_id, access_token)
+            task = Task(
+                config=self.tasks_config['clarification_task'],  # type: ignore[index]
+                agent=agent,
+                output_pydantic=ClarificationAssessment,
+            )
+            crew = Crew(agents=[agent], tasks=[task], process=Process.sequential, verbose=False)
+            assessment = crew.kickoff(inputs={"shopping_request": prompt}).pydantic
+            if assessment is None:
+                raise ValueError("the clarifier returned no structured output")
+            return verify_assessment(assessment, user_text)
+        except Exception:
+            return fallback_result(keyword)
 
     def run_master_recommendation(
         self, prompt: str, profile: dict | None = None, run_id: str | None = None,
