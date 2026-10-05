@@ -31,6 +31,7 @@ DEFAULT_KEEP_RECENT = 6
 MAX_CONVERSATION_CONTEXT = 80
 
 CONVERSATION_TABLE = "conversation"
+SUMMARY_TABLE = "conversation_summary"
 
 SENDERS = {"user", "agent"}
 
@@ -272,6 +273,51 @@ class ConversationMemory(Memory):
             .execute()
         )
         return result.data or []
+
+    def turns_since(self, run_id: str, since: Optional[str], *, access_token: str) -> list[dict]:
+        """This run's turns after `since` (a created_at timestamp), oldest first.
+
+        With no marker, every turn - the run has never been summarised.
+        """
+        query = _supabase(access_token).table(CONVERSATION_TABLE).select("*").eq("run_id", run_id)
+        if since:
+            query = query.gt("created_at", since)
+        return query.order("created_at").execute().data or []
+
+    def read_summary(self, run_id: str, *, access_token: str) -> dict:
+        """The run's rolling summary row, or {} when it has none yet."""
+        result = (
+            _supabase(access_token)
+            .table(SUMMARY_TABLE)
+            .select("*")
+            .eq("run_id", run_id)
+            .execute()
+        )
+        return result.data[0] if result.data else {}
+
+    def write_summary(
+        self,
+        run_id: str,
+        *,
+        summary: Optional[str] = None,
+        through_at: Optional[str] = None,
+        learned_through: Optional[str] = None,
+        access_token: str,
+    ) -> dict:
+        """Upsert only the fields given, so advancing one marker leaves the rest."""
+        row: dict[str, Any] = {"run_id": run_id, "user_id": user_id_from_token(access_token)}
+        for field, value in (
+            ("summary", summary), ("through_at", through_at), ("learned_through", learned_through),
+        ):
+            if value is not None:
+                row[field] = value
+        result = (
+            _supabase(access_token)
+            .table(SUMMARY_TABLE)
+            .upsert(row, on_conflict="run_id")
+            .execute()
+        )
+        return result.data[0] if result.data else {}
 
     def user_text(self, run_id: str, *, access_token: str) -> str:
         """Every user turn joined - what clarity scoring reads.
