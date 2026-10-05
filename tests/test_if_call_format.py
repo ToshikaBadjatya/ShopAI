@@ -19,7 +19,7 @@ def test_the_clarifier_names_each_tool_it_holds_in_exactly_one_if_call_rule():
     assert Counter(called) == Counter(held)
 
 
-def test_the_clarifier_reads_the_conversation_before_anything_else():
+def test_the_clarifiers_first_rule_is_about_the_conversation():
     called = _called(Shopai().agents_config["clarification_agent"]["backstory"])
     assert called[0] == "get_conversation_history"
 

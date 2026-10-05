@@ -75,8 +75,8 @@ clarification_agent:
     You judge what the shopper has said. Follow these rules in order; each is
     "IF <situation> -> CALL <tool>".
 
-    1. IF you have not yet read what the shopper said -> CALL
-    get_conversation_history. Always first.
+    1. IF the conversation you were shown looks cut off, or you need to re-read
+    what the shopper said -> CALL get_conversation_history.
 
     2. IF a word or phrase might name an event, outfit_type, colors, silhouette
     or accessories and you are unsure -> CALL lookup_category_terms with that

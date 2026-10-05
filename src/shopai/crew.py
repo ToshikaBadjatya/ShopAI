@@ -41,6 +41,10 @@ from shopai.tools.weather_tool import WeatherByLocationTool
 
 
 
+# How much of the conversation the clarifier is shown directly (most recent words).
+CONTEXT_CHARS = 2000
+
+
 def _brief(matched: dict) -> str:
     """What the shopper has told us, verified, as one line for the crew."""
     parts = [f"{category}: {', '.join(words)}" for category, words in matched.items() if words]
@@ -373,7 +377,13 @@ class Shopai():
                 output_pydantic=ClarificationAssessment,
             )
             crew = Crew(agents=[agent], tasks=[task], process=Process.sequential, verbose=False)
-            assessment = crew.kickoff(inputs={"shopping_request": prompt}).pydantic
+            assessment = crew.kickoff(inputs={
+                "shopping_request": prompt,
+                # Handed over directly: a small model does not reliably call a
+                # tool to read earlier turns, and without them it re-asks what
+                # the shopper already said. Keeps the most recent words.
+                "conversation_so_far": " ".join(user_text.split())[-CONTEXT_CHARS:],
+            }).pydantic
             if assessment is None:
                 raise ValueError("the clarifier returned no structured output")
             return verify_assessment(assessment, user_text, keyword=keyword)

@@ -100,9 +100,12 @@ review_recommendation_task:
 clarification_task:
   description: >
     The shopper's latest message: "{shopping_request}".
-    Read get_conversation_history, then, for each of event, outfit_type,
-    colors, silhouette and accessories, say whether the shopper stated it,
-    quoting their exact words as evidence, or whether it is missing. Finish
+    Everything they have said in this chat so far, in their own words:
+    "{conversation_so_far}".
+    Judge from everything they said, not just the latest message. For each of
+    event, outfit_type, colors, silhouette and accessories, say whether the
+    shopper stated it, quoting their exact words as evidence, or whether it is
+    missing. Never ask about something they already said. Finish
     with one question about the heaviest missing category - set
     question_category to the category it asks about - or leave the question
     empty when nothing essential is missing.

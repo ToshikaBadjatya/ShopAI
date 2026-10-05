@@ -99,3 +99,34 @@ def test_run_clarification_gives_the_keyword_result_to_the_verifier():
     with patch("shopai.crew.Crew", return_value=_crew_returning(empty)):
         result = Shopai().run_clarification("wedding guest dress", "wedding guest dress")
     assert set(result["present"]) == {"event", "outfit_type"}
+
+
+def _kickoff_inputs(prompt, user_text):
+    """Run run_clarification with a stubbed crew and return the inputs the agent was given."""
+    empty = ClarificationAssessment(findings=[])
+    crew = _crew_returning(empty)
+    with patch("shopai.crew.Crew", return_value=crew):
+        Shopai().run_clarification(prompt, user_text, "run-1", "tok")
+    return crew.kickoff.call_args.kwargs["inputs"]
+
+
+def test_the_clarifier_is_handed_everything_the_shopper_said_not_just_the_last_message():
+    """Regression: turn 1 only reached the agent through a tool a small model skips."""
+    inputs = _kickoff_inputs(
+        "mint tones please",
+        "I need a kurta set for my sister's nikaah\nmint tones please",
+    )
+    assert inputs["shopping_request"] == "mint tones please"
+    assert "nikaah" in inputs["conversation_so_far"]
+    assert "kurta set" in inputs["conversation_so_far"]
+
+
+def test_a_very_long_conversation_keeps_the_most_recent_words_within_budget():
+    inputs = _kickoff_inputs("latest ask", "old " * 2000 + "the latest thing they said")
+    assert len(inputs["conversation_so_far"]) <= 2000
+    assert inputs["conversation_so_far"].endswith("the latest thing they said")
+
+
+def test_the_clarification_task_actually_shows_the_agent_that_text():
+    description = Shopai().tasks_config["clarification_task"]["description"]
+    assert "{conversation_so_far}" in description
