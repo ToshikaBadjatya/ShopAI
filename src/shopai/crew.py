@@ -7,7 +7,7 @@ from crewai.project import CrewBase, agent, crew, task
 from crewai.agents.agent_builder.base_agent import BaseAgent
 
 from shopai.clarity import score_request
-from shopai.conversation_summary import should_summarize, split_for_fold
+from shopai.conversation_summary import request_context, should_summarize, split_for_fold
 from shopai.llm import default_llm, llm_for
 from shopai.memory import memory
 from shopai.prompts import (
@@ -39,6 +39,12 @@ from shopai.tools.weather_tool import WeatherByLocationTool
 # key" or an exhausted quota. Set this to a model id once the gateway can
 # serve one, and llm_for() will pin it.
 
+
+
+def _brief(matched: dict) -> str:
+    """What the shopper has told us, verified, as one line for the crew."""
+    parts = [f"{category}: {', '.join(words)}" for category, words in matched.items() if words]
+    return "; ".join(parts) or "nothing specific"
 
 
 @CrewBase
@@ -374,6 +380,26 @@ class Shopai():
         except Exception:
             return fallback_result(keyword)
 
+    def _request_so_far(self, run_id: str, prompt: str, scored_text: str, access_token: str) -> str:
+        """The shopper's request as the crew should read it.
+
+        A guest has only this message. A signed-in shopper's request is their
+        earlier turns - or, once a conversation was long enough to be summarised,
+        the summary followed by the turns since.
+        """
+        if not access_token:
+            return prompt
+        try:
+            row = memory.conversation.read_summary(run_id, access_token=access_token)
+            if row.get("summary"):
+                turns = memory.conversation.turns_since(
+                    run_id, row.get("through_at"), access_token=access_token
+                )
+                return request_context(row["summary"], turns)
+        except Exception:
+            pass        # an expired token degrades to the plain accumulated text
+        return " ".join(scored_text.split())
+
     def run_master_recommendation(
         self, prompt: str, profile: dict | None = None, run_id: str | None = None,
         access_token: str = "",
@@ -426,7 +452,7 @@ class Shopai():
             }
 
         inputs = {
-            "shopping_request": prompt,
+            "shopping_request": self._request_so_far(run_id, prompt, scored_text, access_token),
             "location": "India",
             "budget": "5000 INR",
             "gender": profile.get("gender") or "female",
@@ -437,9 +463,7 @@ class Shopai():
             # bound to this id and take no run_id argument, so this is for the
             # agent's own reference - it cannot be used to write elsewhere.
             "run_id": run_id,
-            # What the clarification agent's tool checks - the run's
-            # accumulated turns, not just this message.
-            "conversation_text": scored_text,
+            "request_brief": _brief(clarity["matched"]),
             "clarity_tier": clarity["tier"],
             "clarity_present": ", ".join(clarity["present"]) or "none",
             "clarity_missing": ", ".join(clarity["missing"]) or "none",

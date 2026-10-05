@@ -65,48 +65,6 @@ def test_a_continued_run_reuses_the_supplied_run_id():
     assert passed.kwargs["run_id"] == "run-1"
 
 
-def test_compaction_is_attempted_after_the_turn():
-    with patch("shopai.api.app.Shopai") as shopai, \
-         patch("shopai.api.app.memory") as mem, \
-         patch("shopai.api.app.user_id_from_token", return_value="user-1"):
-        shopai.return_value.run_validation.return_value = {
-            "allowed": True, "rejection": "", "message": "", "findings": {}
-        }
-        shopai.return_value.run_master_recommendation.return_value = {
-            "recommendations": [], "summary": "What's the occasion?",
-            "raw": "", "run_id": "run-1", "clarity": {"tier": "low"},
-        }
-        client.post(
-            "/outfit/plan/regular",
-            json={"prompt": "help me with my style", "userToken": "tok"},
-        )
-
-    mem.conversation.compact.assert_called_once_with("user-1", "run-1")
-
-
-def test_a_compaction_failure_does_not_cost_the_user_their_answer():
-    """Mem0 raises outright when MEM0_API_KEY is unset. Housekeeping must not
-    turn into a 500."""
-    with patch("shopai.api.app.Shopai") as shopai, \
-         patch("shopai.api.app.memory") as mem, \
-         patch("shopai.api.app.user_id_from_token", return_value="user-1"):
-        shopai.return_value.run_validation.return_value = {
-            "allowed": True, "rejection": "", "message": "", "findings": {}
-        }
-        shopai.return_value.run_master_recommendation.return_value = {
-            "recommendations": [], "summary": "What's the occasion?",
-            "raw": "", "run_id": "run-1", "clarity": {"tier": "low"},
-        }
-        mem.conversation.compact.side_effect = RuntimeError("Mem0 is not configured.")
-        response = client.post(
-            "/outfit/plan/regular",
-            json={"prompt": "help me with my style", "userToken": "tok"},
-        )
-
-    assert response.status_code == 200
-    assert response.json()["message"] == "What's the occasion?"
-
-
 def test_an_expired_session_token_does_not_500_the_plan():
     """Regression: a Supabase access token is short-lived (~1h) and the app
     does not refresh it, so this is routine, not exceptional. Recording the

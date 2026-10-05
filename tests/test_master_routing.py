@@ -24,6 +24,7 @@ def _run(prompt, user_text=None):
     with patch.object(shopai, "recommendation_crew", return_value=crew), \
          patch("shopai.crew.memory") as mem:
         mem.conversation.user_text.return_value = user_text if user_text is not None else prompt
+        mem.conversation.read_summary.return_value = {}
         result = shopai.run_master_recommendation(prompt, {}, access_token="tok")
     return result, crew
 
@@ -68,15 +69,67 @@ def test_scoring_reads_the_accumulated_run_text_not_just_this_turn():
     assert result["clarity"]["tier"] == "high"
 
 
-def test_conversation_text_reaches_the_crew_inputs():
-    """The master's task needs the accumulated text to hand to the
-    clarification agent's tool via delegation - not just this turn's prompt."""
+def test_the_crew_plans_from_everything_the_shopper_said_not_the_last_message():
+    """Regression: turn 2 used to reach the crew as just 'in navy, show me options'."""
     _, crew = _run(
         "in navy, show me options",
-        user_text="wedding guest dress\nin navy, show me options",
+        user_text="I need a dress\nfor a wedding\nin navy, show me options",
     )
     inputs = crew.kickoff.call_args.kwargs["inputs"]
-    assert inputs["conversation_text"] == "wedding guest dress\nin navy, show me options"
+    assert inputs["shopping_request"] == "I need a dress for a wedding in navy, show me options"
+
+
+def test_a_summary_stands_in_for_the_turns_it_folded():
+    crew = MagicMock()
+    crew.kickoff.return_value = "{}"
+    shopai = Shopai()
+    shopai.run_clarification = _keyword_only
+    with patch.object(shopai, "recommendation_crew", return_value=crew), \
+         patch("shopai.crew.memory") as mem:
+        mem.conversation.user_text.return_value = "I need a dress\nfor a wedding\nin navy\nmake it cheaper"
+        mem.conversation.read_summary.return_value = {
+            "summary": "navy wedding dress, avoid maroon", "through_at": "t5",
+        }
+        mem.conversation.turns_since.return_value = [
+            {"sender": "user", "message": "make it cheaper", "created_at": "t9"},
+            {"sender": "agent", "message": "Sure.", "created_at": "t10"},
+        ]
+        shopai.run_master_recommendation("make it cheaper", {}, run_id="run-1", access_token="tok")
+    inputs = crew.kickoff.call_args.kwargs["inputs"]
+    assert inputs["shopping_request"] == "navy wedding dress, avoid maroon make it cheaper"
+
+
+def test_a_guest_is_planned_from_the_one_message_they_sent_and_nothing_is_read():
+    crew = MagicMock()
+    crew.kickoff.return_value = "{}"
+    shopai = Shopai()
+    with patch.object(shopai, "recommendation_crew", return_value=crew), \
+         patch("shopai.crew.memory") as mem:
+        shopai.run_master_recommendation(HIGH, {}, run_id="run-1")      # no access_token
+    assert crew.kickoff.call_args.kwargs["inputs"]["shopping_request"] == HIGH
+    mem.conversation.read_summary.assert_not_called()
+    mem.conversation.user_text.assert_not_called()
+
+
+def test_the_brief_lists_what_was_verified():
+    _, crew = _run(HIGH)
+    brief = crew.kickoff.call_args.kwargs["inputs"]["request_brief"]
+    assert "outfit_type: dress" in brief and "colors: black" in brief
+
+
+def test_the_brief_says_so_when_nothing_specific_was_found():
+    from shopai.crew import _brief
+    assert _brief({}) == "nothing specific"
+
+
+def test_the_dead_conversation_text_input_is_gone():
+    _, crew = _run(HIGH)
+    assert "conversation_text" not in crew.kickoff.call_args.kwargs["inputs"]
+
+
+def test_the_master_task_actually_uses_the_brief():
+    description = Shopai().tasks_config["master_recommendation_task"]["description"]
+    assert "{request_brief}" in description
 
 
 def test_run_id_still_reaches_the_crew_inputs():

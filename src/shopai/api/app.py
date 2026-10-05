@@ -19,13 +19,12 @@ from typing import List, Literal, Optional
 
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 
-from fastapi import FastAPI
+from fastapi import BackgroundTasks, FastAPI, Header
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from shopai.crew import Shopai
 from shopai.memory import memory
-from shopai.memory.user_memory import user_id_from_token
 from shopai.telemetry import setup_telemetry
 
 setup_telemetry()
@@ -173,28 +172,37 @@ async def _guard(prompt: str) -> tuple[dict, Optional[PlanResponse]]:
 # Endpoints
 # ---------------------------------------------------------------------------
 
-def _compact_if_full(run_id: str, access_token: str) -> None:
-    """Fold the conversation down if it has filled the context window.
+# Chats being summarised right now, so two requests for one chat never do the
+# same expensive work twice.
+_maintaining: set[str] = set()
 
-    compact() decides for itself whether the threshold has been crossed; this
-    only has to ask. Failures are swallowed on purpose - compaction is
-    housekeeping, and Mem0 raises outright when MEM0_API_KEY is unset, which
-    must not cost the user their answer.
+
+def _maintain(run_id: str, token: str, final: bool = False) -> None:
+    """Summarise, learn and remember for one chat, in the background.
+
+    Runs after the response is sent, so the 25-45 s a small model needs never
+    reaches the shopper. Every failure is swallowed: this is housekeeping, and
+    a retry happens on the next trigger because each step only advances its own
+    marker when it succeeds.
     """
-    if not access_token:
+    if run_id in _maintaining:
         return
-
-    user_id = user_id_from_token(access_token)
-    if not user_id:
-        return
-
+    _maintaining.add(run_id)
     try:
-        memory.conversation.compact(user_id, run_id)
+        Shopai().maintain_conversation(run_id, token, final=final)
     except Exception:
         pass
+    finally:
+        _maintaining.discard(run_id)
 
 
-async def _plan(request: PlanRequest) -> PlanResponse:
+def _bearer(authorization: Optional[str]) -> str:
+    """The token from an `Authorization: Bearer <token>` header, or ''."""
+    scheme, _, token = (authorization or "").partition(" ")
+    return token.strip() if scheme.lower() == "bearer" else ""
+
+
+async def _plan(request: PlanRequest, background: Optional[BackgroundTasks] = None) -> PlanResponse:
     """One turn: check it, hand it to the master, compact if that filled things up.
 
     Recording the transcript is the master's own job now, not this layer's -
@@ -245,24 +253,33 @@ async def _plan(request: PlanRequest) -> PlanResponse:
     )
     response.runId = run_id
 
-    _compact_if_full(run_id, token)
+    if token and background is not None:
+        background.add_task(_maintain, run_id, token)
     return response
 
 
 @app.post("/outfit/plan/regular", response_model=PlanResponse)
-async def plan_regular(request: PlanRequest) -> PlanResponse:
+async def plan_regular(request: PlanRequest, background: BackgroundTasks) -> PlanResponse:
     """Guardrail, then the Recommendation Master crew."""
-    return await _plan(request)
+    return await _plan(request, background)
 
 
 @app.post("/outfit/plan/occasional", response_model=PlanResponse)
-async def plan_occasional(request: PlanRequest) -> PlanResponse:
+async def plan_occasional(request: PlanRequest, background: BackgroundTasks) -> PlanResponse:
     """Guardrail, then the Recommendation Master crew - same pipeline as regular."""
-    return await _plan(request)
+    return await _plan(request, background)
 
 
 @app.delete("/task/{run_id}")
-async def clear_task(run_id: str) -> dict:
-    """Discard a run's task ledger entirely."""
+async def clear_task(
+    run_id: str,
+    background: BackgroundTasks,
+    authorization: Optional[str] = Header(None),
+) -> dict:
+    """The chat has ended: discard the task ledger, and - when the app sent the
+    shopper's token - summarise, learn and remember from the finished chat."""
+    token = _bearer(authorization)
+    if token:
+        background.add_task(_maintain, run_id, token, True)
     cleared = memory.task.delete(run_id)
     return {"cleared": cleared}

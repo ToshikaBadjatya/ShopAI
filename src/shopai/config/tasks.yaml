@@ -63,6 +63,7 @@ master_recommendation_task:
     You are working on run {run_id}. Your ledger tools already write to this
     run - they take no run id, so plan and update steps without naming one.
 
+    What the shopper has told us, verified: {request_brief}.
     This request scored {clarity_tier} on clarity. Present: {clarity_present}.
     Missing: {clarity_missing}.
 
