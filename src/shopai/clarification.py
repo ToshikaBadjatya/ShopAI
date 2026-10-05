@@ -66,6 +66,19 @@ def _normal(text: str) -> str:
     return " ".join(re.findall(r"[a-z0-9'-]+", text.lower()))
 
 
+def evidence_in_text(evidence: str, user_text: str) -> bool:
+    """Is `evidence` the shopper's own words, naming something?
+
+    True when it appears in `user_text` on whole-word boundaries and is not
+    made only of words that name nothing ("outfit", "I want"). Shared by the
+    clarifier's verification and the profile-write rules.
+    """
+    needle = _normal(evidence)
+    if not set(needle.split()) - GENERIC_WORDS:
+        return False
+    return f" {needle} " in f" {_normal(user_text)} "
+
+
 def verify_assessment(
     assessment: ClarificationAssessment, user_text: str, keyword: Optional[dict] = None
 ) -> dict:
@@ -76,7 +89,6 @@ def verify_assessment(
     misses them - an agent that forgets "wedding guest dress" must not make the
     shopper say it again.
     """
-    haystack = f" {_normal(user_text)} "
     matched: dict[str, list[str]] = {}
     spans_used: set[str] = set()
     dropped = False
@@ -85,9 +97,8 @@ def verify_assessment(
             continue
         needle = _normal(finding.evidence)
         if (
-            not set(needle.split()) - GENERIC_WORDS      # names nothing
-            or needle in spans_used                      # one span, one category
-            or f" {needle} " not in haystack             # not the shopper's words
+            needle in spans_used                              # one span, one category
+            or not evidence_in_text(finding.evidence, user_text)  # not their words, or names nothing
         ):
             dropped = True
             continue

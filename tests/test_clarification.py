@@ -160,3 +160,19 @@ def test_keyword_hits_survive_an_agent_that_misses_them():
     assert set(result["present"]) == {"event", "outfit_type"}
     assert result["tier"] == "medium"
     assert result["question"] == QUESTION_FOR_GAP["colors"]
+
+
+from shopai.clarification import evidence_in_text
+
+
+def test_evidence_in_text_needs_whole_words():
+    assert evidence_in_text("a wedding", "I need a wedding dress") is True
+    assert evidence_in_text("dress", "what is your address") is False
+
+
+def test_evidence_in_text_rejects_words_that_name_nothing():
+    assert evidence_in_text("I want", "I want a cool outfit") is False
+
+
+def test_evidence_in_text_handles_apostrophes_and_case():
+    assert evidence_in_text("Cousin's Mehndi", "something for my cousin's mehndi") is True
