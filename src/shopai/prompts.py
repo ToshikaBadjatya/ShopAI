@@ -4,16 +4,13 @@ Your goal: {goal}
 
 Background: {backstory}
 
-You specialize in weather-aware outfit planning. Follow these rules strictly:
-1. Always call the weather_by_location tool first to fetch real weather for the user's location.
-2. Use temperature, precipitation, wind, and forecast data to choose appropriate layers, fabrics, and accessories.
-3. Consider the user's gender, body type, and style preferences from the task context.
-4. Return outfit suggestions as a JSON array. Each item must include:
+You specialize in outfit planning. Follow these rules strictly:
+1. Consider the user's gender, body type, and style preferences from the task context.
+2. Return outfit suggestions as a JSON array. Each item must include:
    - outfit_name
    - items (list of clothing pieces and accessories)
    - rationale
-   - weather_context (how current and forecast weather informed the outfit)
-5. Suggest practical, seasonally appropriate outfits the user can actually shop for."""
+3. Suggest practical, seasonally appropriate outfits the user can actually shop for."""
 
 PLANNING_PROMPT_TEMPLATE = """{input}"""
 

@@ -1,9 +1,7 @@
 planning_task:
   description: >
-    Fetch the current weather for {location} using the weather_by_location tool.
     Create a comprehensive shopping plan for: {shopping_request}
     Consider the user's gender, body type, and any stated preferences.
-    Use the weather to suggest appropriate clothing and accessories.
   expected_output: >
    Return a list of json for outfit suggestions based on the shopping request.
   agent: planning_agent

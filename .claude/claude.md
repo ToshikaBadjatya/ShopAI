@@ -23,7 +23,7 @@ ShopAI is an AI outfit-planning and shopping assistant ("Sia"). A **CrewAI** mul
 
 | Agent | Job | Tools |
 |---|---|---|
-| `planning_agent` | Shopping plan from the request | `WeatherByLocationTool` |
+| `planning_agent` | Shopping plan from the request | — |
 | `recommendation_agent` | Find products per outfit piece | `OutfitScraperTool` |
 | `visualize_agent` | Render the outfit image | `OutfitVisualizationTool` |
 | `marketplace_agent` | **Stub** — role is still `TODO`, no tools | — |

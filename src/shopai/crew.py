@@ -23,7 +23,6 @@ from shopai.tools.outfit_scraper_tool import OutfitScraperTool
 from shopai.tools.task_ledger_tools import task_ledger_tools
 from shopai.tools.validation_tools import validate_request
 from shopai.tools.outfit_visualization_tool import OutfitVisualizationTool
-from shopai.tools.weather_tool import WeatherByLocationTool
 
 
 # The clarifier turns one named gap into one question - small, bounded work
@@ -54,7 +53,7 @@ class Shopai():
         return Agent(
             llm=default_llm(),
             config=self.agents_config['planning_agent'],  # type: ignore[index]
-            tools=[WeatherByLocationTool()],
+            tools=[],
             system_template=PLANNING_SYSTEM_TEMPLATE,
             prompt_template=PLANNING_PROMPT_TEMPLATE,
             use_system_prompt=True,
@@ -393,16 +392,13 @@ class Shopai():
         Returns:
             {
                 "outfits": [...],   # list parsed from the agent JSON output
-                "weather": {},      # weather dict if embedded in output, else {}
                 "raw": "..."        # full raw string returned by the agent
             }
         """
         description = (
-            "Fetch the current weather for {location} using the weather_by_location tool.\n"
             "Create a comprehensive shopping plan for: {shopping_request}\n"
             "Consider the user's gender ({gender}), body type ({body_type}), "
             "height ({height}), style ({style}), and any stated preferences.\n"
-            "Use the weather to suggest appropriate clothing and accessories.\n"
             "Stay within the budget of {budget}."
         ).format(**inputs)
 
@@ -410,7 +406,7 @@ class Shopai():
             description=description,
             expected_output=(
                 "Return a JSON array of outfit suggestions based on the shopping request. "
-                "Each item must include outfit_name, items, rationale, and weather_context."
+                "Each item must include outfit_name, items, and rationale."
             ),
             agent=self.planning_agent(),
         )
@@ -566,27 +562,25 @@ class Shopai():
         return None
 
     def _parse_planning_output(self, raw: str) -> dict:
-        """Extract outfit list and optional weather data from planning raw output.
+        """Extract the outfit list from planning raw output.
 
         Returns:
-            {"outfits": [...], "weather": {}, "raw": raw}
+            {"outfits": [...], "raw": raw}
         """
         parsed = self._extract_json_from_text(raw)
 
         outfits = []
-        weather = {}
 
         if isinstance(parsed, list):
             outfits = parsed
         elif isinstance(parsed, dict):
-            # Some models wrap outfits inside {"outfits": [...], "weather": {...}}
+            # Some models wrap outfits inside {"outfits": [...] }
             outfits = parsed.get("outfits", parsed.get("outfit_suggestions", []))
-            weather = parsed.get("weather", parsed.get("weather_data", {}))
             if not outfits and isinstance(parsed, dict):
                 # Treat the whole dict as a single outfit entry
                 outfits = [parsed]
 
-        return {"outfits": outfits, "weather": weather, "raw": raw}
+        return {"outfits": outfits, "raw": raw}
 
     def _parse_recommendation_output(self, raw: str) -> dict:
         """Extract product recommendations from recommendation raw output.

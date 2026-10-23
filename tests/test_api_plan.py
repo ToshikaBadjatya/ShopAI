@@ -163,3 +163,22 @@ def test_parser_keeps_the_top_pick():
 
     raw = '{"recommendations": [{"outfit_name": "A", "products": []}], "top_pick": "A - cooler."}'
     assert Shopai()._parse_recommendation_crew_output(raw)["top_pick"] == "A - cooler."
+
+
+def test_lifespan_starts_tracing_and_clears_the_plan_store_on_exit():
+    from shopai.api import app as app_module
+
+    app_module._plan_store["p"] = {"recommendation": {}}
+    with patch("shopai.api.app.setup_telemetry") as setup:
+        with TestClient(app):  # entering the context runs startup
+            setup.assert_called_once()
+            assert "p" in app_module._plan_store
+        # leaving it runs shutdown
+    assert app_module._plan_store == {}
+
+
+def test_importing_the_app_does_not_start_tracing():
+    """Tests build TestClient(app) bare; that must not register Arize."""
+    with patch("shopai.api.app.setup_telemetry") as setup:
+        TestClient(app).get("/openapi.json")
+    setup.assert_not_called()

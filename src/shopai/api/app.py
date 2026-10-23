@@ -15,12 +15,14 @@ import asyncio
 import os
 import uuid
 import warnings
+from contextlib import asynccontextmanager
 from typing import List, Literal, Optional
 
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from opentelemetry import trace
 from pydantic import BaseModel
 
 from shopai.crew import Shopai
@@ -28,17 +30,36 @@ from shopai.memory import memory
 from shopai.memory.user_memory import user_id_from_token
 from shopai.telemetry import setup_telemetry
 
-setup_telemetry()
+# planId -> {recommendation, inputs, userToken, validation}
+_plan_store: dict[str, dict] = {}
 
-app = FastAPI(title="ShopAI", version="0.1.0")
 
-# Serve generated images at /static/<filename>
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Process start-up and shut-down.
+
+    Tracing is registered here rather than at import, so importing this module
+    (tests do) has no side effects. On the way out, pending spans are flushed -
+    the Arize exporter batches them, and a stop would otherwise drop the last
+    few - and the in-memory plan store is cleared.
+    """
+    setup_telemetry()
+    yield
+
+    provider = trace.get_tracer_provider()
+    shutdown = getattr(provider, "shutdown", None)  # the no-op default has none
+    if callable(shutdown):
+        shutdown()
+    _plan_store.clear()
+
+
+app = FastAPI(title="ShopAI", version="0.1.0", lifespan=lifespan)
+
+# Serve generated images at /static/<filename>. The directory has to exist when
+# the mount is created, so this stays at import time.
 _OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "output")
 os.makedirs(_OUTPUT_DIR, exist_ok=True)
 app.mount("/static", StaticFiles(directory=_OUTPUT_DIR), name="static")
-
-# planId -> {recommendation, inputs, userToken, validation}
-_plan_store: dict[str, dict] = {}
 
 
 # ---------------------------------------------------------------------------
