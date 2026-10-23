@@ -136,6 +136,7 @@ fun NavGraph(
         composable(Screen.Chat.route) {
             val chatItems by chatViewModel.items.collectAsState()
             val selectedOptionIds by chatViewModel.selectedOptionIds.collectAsState()
+            val isPlanning by chatViewModel.isPlanning.collectAsState()
 
             ChatScreen(
                 items = chatItems,
@@ -143,6 +144,8 @@ fun NavGraph(
                 onOptionSelected = { _, optionId -> chatViewModel.selectOption(optionId) },
                 onBack = { navController.popBackStack() },
                 onSendMessage = { message -> chatViewModel.planOutfit(moodText = message) },
+                isPlanning = isPlanning,
+                onStop = { chatViewModel.stopPlanning() },
                 onLeave = { chatViewModel.clearCurrentTask() }
             )
         }

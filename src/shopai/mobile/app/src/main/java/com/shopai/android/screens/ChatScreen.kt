@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AddCircleOutline
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
@@ -77,6 +78,9 @@ fun ChatScreen(
     onPermissionAllow: (itemId: String) -> Unit = {},
     onPermissionDeny: (itemId: String) -> Unit = {},
     onPermissionDetails: (itemId: String) -> Unit = {},
+    /** While Sia is working, the send button becomes a stop button. */
+    isPlanning: Boolean = false,
+    onStop: () -> Unit = {},
     /** Fired when this screen leaves composition - e.g. navigating back. */
     onLeave: () -> Unit = {}
 ) {
@@ -95,7 +99,14 @@ fun ChatScreen(
     Scaffold(
         modifier = modifier,
         topBar = { ShopAITopBar(title = title, showBack = true, onBack = onBack) },
-        bottomBar = { ChatInputBar(onSend = onSendMessage, onAttach = onAttach) },
+        bottomBar = {
+            ChatInputBar(
+                onSend = onSendMessage,
+                onAttach = onAttach,
+                isPlanning = isPlanning,
+                onStop = onStop
+            )
+        },
         containerColor = Background
     ) { padding ->
         LazyColumn(
@@ -152,7 +163,9 @@ fun ChatScreen(
 @Composable
 private fun ChatInputBar(
     onSend: (String) -> Unit,
-    onAttach: () -> Unit
+    onAttach: () -> Unit,
+    isPlanning: Boolean = false,
+    onStop: () -> Unit = {}
 ) {
     var draft by remember { mutableStateOf("") }
 
@@ -196,9 +209,13 @@ private fun ChatInputBar(
                 )
             )
 
+            // One button, two jobs: a run in flight takes one message at a
+            // time, so while Sia works the slot sends a stop instead.
             IconButton(
                 onClick = {
-                    if (draft.isNotBlank()) {
+                    if (isPlanning) {
+                        onStop()
+                    } else if (draft.isNotBlank()) {
                         onSend(draft.trim())
                         draft = ""
                     }
@@ -208,8 +225,8 @@ private fun ChatInputBar(
                     .background(ShopAIRed, CircleShape)
             ) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.Send,
-                    contentDescription = "Send",
+                    imageVector = if (isPlanning) Icons.Filled.Stop else Icons.AutoMirrored.Filled.Send,
+                    contentDescription = if (isPlanning) "Stop" else "Send",
                     tint = Color.White,
                     modifier = Modifier.size(22.dp)
                 )

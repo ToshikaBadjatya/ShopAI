@@ -10,6 +10,9 @@ import com.shopai.android.data.model.ErrorKind
 import com.shopai.android.data.model.OutfitPlanRequest
 import com.shopai.android.data.model.OutfitPlanResponse
 import com.shopai.android.data.model.PlanResponse
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,6 +46,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
      * message starting a fresh run on the server.
      */
     private var currentRunId: String? = null
+
+    /** The plan in flight - the POST, then the status polls after it. Cancelled by a stop. */
+    private var planJob: Job? = null
+
+    /** The thinking line that plan's progress is drawn on, so a stop can replace it. */
+    private var planThinkingId: String? = null
 
     // ---------------------------------------------------------------- transcript
 
@@ -108,6 +117,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
      * user is already leaving.
      */
     fun clearCurrentTask() {
+        // Nobody is left to read the polls. The server stops the run itself
+        // when the ledger is cleared below.
+        planJob?.cancel()
         val runId = currentRunId ?: return
         currentRunId = null
         viewModelScope.launch {
@@ -155,8 +167,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     /**
      * Posts the composed prompt as the user's message and asks the backend for looks:
-     * `outfit/plan/occasional` when [occasional], otherwise `outfit/plan`. Progress
-     * shows as a single thinking line, which the reply then takes the place of.
+     * `outfit/plan/occasional` when [occasional], otherwise `outfit/plan/regular`.
+     *
+     * The backend answers a guardrail rejection at once; anything else comes back as
+     * a `status` envelope - the plan runs in the background - and this polls
+     * `outfit/plan/{runId}/status` every [POLL_INTERVAL_MS] until it succeeds, fails,
+     * or is stopped. Progress shows on a single thinking line, which the reply then
+     * takes the place of.
      */
     fun planOutfit(
         moodText: String,
@@ -167,18 +184,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (prompt.isBlank() || _isPlanning.value) return
 
         append(ChatItem.UserMessage(id = newId(), text = prompt))
-//        append(
-//            ChatItem.AssistantMessage(
-//                id = newId(),
-//                text = "On it, bestie! I'm curating a look for you right now."
-//            )
-//        )
 
         val thinkingId = startThinking("Curating your looks...")
+        planThinkingId = thinkingId
 
-        viewModelScope.launch {
-            _isPlanning.value = true
-            _planIdeas.value = emptyList()
+        // Set before the launch, not inside it: a second tap in between would
+        // otherwise slip past the guard above.
+        _isPlanning.value = true
+        _planIdeas.value = emptyList()
+
+        planJob = viewModelScope.launch {
             try {
                 val request = OutfitPlanRequest(
                     prompt = prompt,
@@ -192,11 +207,22 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 val body = response.body()
-                if (response.isSuccessful && body != null) {
-                    handlePlanResponse(thinkingId, body)
-                } else {
-                    failPlanning(thinkingId, "Sia couldn't plan this one (${response.code()}).")
+                when {
+                    !response.isSuccessful || body == null ->
+                        failPlanning(thinkingId, "Sia couldn't plan this one (${response.code()}).")
+
+                    body.kind == KIND_STATUS -> {
+                        // A conversation that had no run yet is on the server's now.
+                        if (currentRunId == null) currentRunId = body.runId
+                        updateThinking(thinkingId, body.message.ifBlank { "Curating your looks..." })
+                        pollUntilDone(thinkingId, body.runId)
+                    }
+
+                    else -> handlePlanResponse(thinkingId, body)
                 }
+            } catch (e: CancellationException) {
+                // A stop or a screen exit - whoever cancelled has already said so.
+                throw e
             } catch (e: Exception) {
                 failPlanning(
                     thinkingId,
@@ -204,7 +230,96 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 )
             } finally {
                 _isPlanning.value = false
+                planThinkingId = null
             }
+        }
+    }
+
+    /**
+     * Polls a background run until it is no longer `running`, then shows how it ended.
+     *
+     * A failed poll is retried - one dropped request on mobile data is not a failed
+     * plan - but [MAX_POLL_FAILURES] in a row is. A run the server no longer knows
+     * (404: restarted, or long finished) is over. [MAX_POLL_MS] caps the whole wait.
+     */
+    private suspend fun pollUntilDone(thinkingId: String, runId: String) {
+        val deadline = System.currentTimeMillis() + MAX_POLL_MS
+        var lastStep = -1
+        var failures = 0
+
+        while (true) {
+            delay(POLL_INTERVAL_MS)
+
+            if (System.currentTimeMillis() > deadline) {
+                stopOnServer(runId)
+                failPlanning(thinkingId, "Sia is taking too long on this one. Try again in a bit.")
+                return
+            }
+
+            val response = try {
+                RetrofitClient.apiService.planStatus(runId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (++failures >= MAX_POLL_FAILURES) {
+                    failPlanning(thinkingId, e.message ?: "Lost touch with Sia. Try again?")
+                    return
+                }
+                continue
+            }
+
+            if (response.code() == 404) {
+                failPlanning(thinkingId, "Sia lost track of this one. Try asking again.")
+                return
+            }
+
+            val body = response.body()
+            if (!response.isSuccessful || body == null) {
+                if (++failures >= MAX_POLL_FAILURES) {
+                    failPlanning(thinkingId, "Sia couldn't plan this one (${response.code()}).")
+                    return
+                }
+                continue
+            }
+            failures = 0
+
+            if (body.state == STATE_RUNNING) {
+                if (body.step != lastStep && body.message.isNotBlank()) {
+                    updateThinking(thinkingId, body.message)
+                    lastStep = body.step
+                }
+                continue
+            }
+
+            handlePlanResponse(thinkingId, body)
+            return
+        }
+    }
+
+    /**
+     * The user's stop. Polling ends here and now; the server is asked to stop the
+     * crew too, best-effort - it ends at its next step, and nobody needs to wait
+     * for that to say so.
+     */
+    fun stopPlanning() {
+        val job = planJob ?: return
+        if (!job.isActive) return
+        job.cancel()
+
+        planThinkingId?.let { finishThinking(it, "Stopped. Tell me when you want to pick it back up.") }
+        planThinkingId = null
+        _isPlanning.value = false
+
+        currentRunId?.let { runId -> viewModelScope.launch { stopOnServer(runId) } }
+    }
+
+    private suspend fun stopOnServer(runId: String) {
+        try {
+            RetrofitClient.apiService.stopPlan(runId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Best-effort - see stopPlanning.
         }
     }
 
@@ -227,6 +342,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             KIND_ERROR -> failPlanning(thinkingId, body.message, errorKind(body.errorKind))
+
+            // Only a poll loop should see this, but a stray one still means "working on it".
+            KIND_STATUS -> updateThinking(thinkingId, body.message.ifBlank { "Still working..." })
 
             // An unknown kind is a newer server talking to an older app: say the
             // message rather than dropping the turn on the floor.
@@ -282,5 +400,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         const val KIND_MESSAGE = "message"
         const val KIND_PERMISSION = "permission"
         const val KIND_ERROR = "error"
+        const val KIND_STATUS = "status"
+        const val STATE_RUNNING = "running"
+
+        const val POLL_INTERVAL_MS = 5_000L
+        const val MAX_POLL_FAILURES = 3
+        const val MAX_POLL_MS = 15 * 60 * 1_000L
     }
 }

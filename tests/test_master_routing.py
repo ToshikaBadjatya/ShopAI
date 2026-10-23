@@ -6,7 +6,7 @@ from shopai.crew import Shopai
 HIGH = "black fitted midi dress for a cocktail party with gold jewellery"
 
 
-def _keyword_only(prompt, user_text, run_id="", access_token=""):
+def _keyword_only(prompt, user_text, run_id="", access_token="", step_callback=None):
     """The clarification step without a model: the keyword verdict plus a fixed question."""
     return {**score_request(user_text), "question": "What's the occasion?", "source": "keyword"}
 

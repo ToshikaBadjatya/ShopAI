@@ -34,12 +34,18 @@ data class OutfitPlanResponse(
 
 /**
  * One shape for every plan outcome. [kind] says what the body holds:
- * `plan` (outfits populated), `message`, `permission`, or `error`.
+ * `plan` (outfits populated), `message`, `permission`, `error`, or `status` -
+ * the run is still going and [message] says what Sia is doing.
+ *
+ * [state] is where the run stands: `running` until it `succeeded`, `failed` or
+ * was `cancelled`. [step] moves on each time the status line changes.
  */
 data class PlanResponse(
     val kind: String = "plan",
     val message: String = "",
     val outfits: List<OutfitPlanResponse> = emptyList(),
     val runId: String = "",
-    val errorKind: String = "system_down"
+    val errorKind: String = "system_down",
+    val state: String = "",
+    val step: Int = 0
 )

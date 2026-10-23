@@ -1,6 +1,7 @@
 import json
 import re
 import uuid
+from typing import Any, Callable
 
 from crewai import Agent, Crew, Process, Task
 from crewai.project import CrewBase, agent, crew, task
@@ -17,7 +18,9 @@ from shopai.prompts import (
     VISUALIZE_SYSTEM_TEMPLATE,
     VISUALIZE_PROMPT_TEMPLATE,
 )
+from shopai import progress
 from shopai.clarification import ClarificationAssessment, fallback_result, verify_assessment
+from shopai.runs import RunCancelled
 from shopai.tools.clarification_tools import clarification_context_tools
 from shopai.tools.outfit_scraper_tool import OutfitScraperTool
 from shopai.tools.task_ledger_tools import task_ledger_tools
@@ -35,6 +38,34 @@ from shopai.tools.outfit_visualization_tool import OutfitVisualizationTool
 # key" or an exhausted quota. Set this to a model id once the gateway can
 # serve one, and llm_for() will pin it.
 
+
+
+def _no_progress(_: str) -> None:
+    pass
+
+
+def _never_stop() -> bool:
+    return False
+
+
+def step_hook(
+    on_progress: Callable[[str], None], should_stop: Callable[[], bool]
+) -> Callable[[Any], None]:
+    """A CrewAI step callback that reports each step and honours a stop.
+
+    CrewAI calls it after every agent step without catching what it raises,
+    so raising RunCancelled here ends kickoff at the next step. A model call
+    already in flight still finishes first - a thread cannot be interrupted
+    mid-request.
+    """
+    def hook(step: Any) -> None:
+        if should_stop():
+            raise RunCancelled()
+        line = progress.progress_text(step)
+        if line:
+            on_progress(line)
+
+    return hook
 
 
 @CrewBase
@@ -190,7 +221,12 @@ class Shopai():
             verbose=True,
         )
 
-    def recommendation_crew(self, run_id: str = "") -> Crew:
+    def recommendation_crew(
+        self,
+        run_id: str = "",
+        step_callback: Callable[[Any], None] | None = None,
+        task_callback: Callable[[Any], None] | None = None,
+    ) -> Crew:
         """Hierarchical crew: the master routes work to the specialists.
 
         CrewAI requires the manager to sit outside the agents list, and refuses
@@ -198,6 +234,9 @@ class Shopai():
         task rather than on the master: at execution time CrewAI resolves
         `task.tools or agent.tools` and then merges the delegation tools into
         whatever that produced, so the master ends up holding both.
+
+        The callbacks are how a background run reports progress and notices a
+        stop - see step_hook.
         """
         return Crew(
             agents=[
@@ -214,6 +253,8 @@ class Shopai():
             ],
             process=Process.hierarchical,
             manager_agent=self.recommendation_master_agent(),
+            step_callback=step_callback,
+            task_callback=task_callback,
             verbose=True,
         )
 
@@ -233,14 +274,16 @@ class Shopai():
         return validate_request(prompt)
 
     def run_clarification(
-        self, prompt: str, user_text: str, run_id: str = "", access_token: str = ""
+        self, prompt: str, user_text: str, run_id: str = "", access_token: str = "",
+        step_callback: Callable[[Any], None] | None = None,
     ) -> dict:
         """Is this request plannable, and if not, what is the one question?
 
         A request the keyword scorer already rates high skips the agent -
         there is nothing to ask. Otherwise the agent judges, and Python
         verifies: see shopai.clarification. Any agent failure falls back to
-        the keyword scorer with a templated question.
+        the keyword scorer with a templated question. A stop is not a failure:
+        RunCancelled is a BaseException, so the fallback never catches it.
         """
         keyword = score_request(user_text)
         if keyword["tier"] == "high":
@@ -253,7 +296,10 @@ class Shopai():
                 agent=agent,
                 output_pydantic=ClarificationAssessment,
             )
-            crew = Crew(agents=[agent], tasks=[task], process=Process.sequential, verbose=False)
+            crew = Crew(
+                agents=[agent], tasks=[task], process=Process.sequential,
+                step_callback=step_callback, verbose=False,
+            )
             assessment = crew.kickoff(inputs={"shopping_request": prompt}).pydantic
             if assessment is None:
                 raise ValueError("the clarifier returned no structured output")
@@ -264,6 +310,8 @@ class Shopai():
     def run_master_recommendation(
         self, prompt: str, profile: dict | None = None, run_id: str | None = None,
         access_token: str = "",
+        on_progress: Callable[[str], None] | None = None,
+        should_stop: Callable[[], bool] | None = None,
     ) -> dict:
         """Hand a request to the Recommendation Master crew.
 
@@ -275,6 +323,11 @@ class Shopai():
         message, which is how a vague request climbs low -> medium -> high as
         the user answers.
 
+        `on_progress` hears a line each time the run moves on, and
+        `should_stop` is asked between phases and after every agent step - a
+        True ends the run by raising RunCancelled. Both are optional; a plain
+        call behaves exactly as before.
+
         Returns:
             {"recommendations": [...], "summary": "...", "raw": "...",
              "run_id": "...", "clarity": {...}}
@@ -282,6 +335,13 @@ class Shopai():
         run_id = run_id or str(uuid.uuid4())
         profile = profile or {}
         styles = profile.get("styles") or []
+        on_progress = on_progress or _no_progress
+        should_stop = should_stop or _never_stop
+        hook = step_hook(on_progress, should_stop)
+
+        def check_stop() -> None:
+            if should_stop():
+                raise RunCancelled()
 
         # Written before the read below, not after: scoring must see this
         # message, not just the run's earlier turns.
@@ -300,7 +360,12 @@ class Shopai():
                 # not the run itself - better than failing the whole request
                 # over a transcript read.
                 pass
-        clarity = self.run_clarification(prompt, scored_text, run_id, access_token)
+
+        check_stop()
+        on_progress(progress.CLARIFYING)
+        clarity = self.run_clarification(
+            prompt, scored_text, run_id, access_token, step_callback=hook
+        )
         if clarity["tier"] != "high":
             question = clarity["question"]
             self._append_turn(run_id, "agent", question, access_token)
@@ -338,7 +403,17 @@ class Shopai():
             ),
         }
 
-        raw = str(self.recommendation_crew(run_id).kickoff(inputs=inputs))
+        check_stop()
+        on_progress(progress.PLANNING)
+        crew = self.recommendation_crew(
+            run_id,
+            step_callback=hook,
+            # The master's task is the first to finish; the reviewer's is next.
+            task_callback=lambda _: on_progress(progress.REVIEWING),
+        )
+        raw = str(crew.kickoff(inputs=inputs))
+        check_stop()
+        on_progress(progress.FINISHING)
         parsed = self._parse_recommendation_crew_output(raw)
 
         # Only carries text when there is text to carry: a real plan's summary
